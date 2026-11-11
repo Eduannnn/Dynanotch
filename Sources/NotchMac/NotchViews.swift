@@ -153,7 +153,7 @@ struct NotchRootView: View {
                                             .padding(3)
                                     }.id(notice.id)
                                 }
-                                SystemAirPodsGlyph(artwork: artwork, fallback: notice.kind.symbol, connected: true, size: 22)
+                                AirPodsNoticeGlyph(notice: notice, artwork: artwork, model: model, size: 22)
                                     .id("\(notice.id)/\(artwork.productID)/\(artwork.colorID ?? -1)")
                             }
                             .overlay {
@@ -781,6 +781,22 @@ private struct AirPodsBatteryMorph<Compact: View>: View, Animatable {
     }
 }
 
+private struct AirPodsNoticeGlyph: View {
+    var notice: DeviceNotice
+    var artwork: AirPodsArtwork
+    var model: NotchModel
+    var size: CGFloat
+    @Environment(\.staticNotchPreview) private var staticPreview
+
+    var body: some View {
+        SystemAirPodsGlyph(artwork: artwork, fallback: notice.kind.symbol, connected: notice.connected, size: size,
+                           playMovie: !staticPreview && model.shouldPlayAirPodsMovie(notice.id),
+                           onPlaybackReady: { model.airPodsMovieReady(notice.id, duration: $0) },
+                           onPlaybackEnd: { model.airPodsMovieEnded(notice.id) },
+                           onPlaybackFailure: { model.airPodsMovieFailed(notice.id) })
+    }
+}
+
 struct InlineNoticeView: View {
     var notice: DeviceNotice
     @ObservedObject var model: NotchModel
@@ -796,8 +812,7 @@ struct InlineNoticeView: View {
                     Text(notice.name).font(.system(size: 16, weight: .medium)).foregroundStyle(color).lineLimit(1)
                 } else {
                     if notice.transport == "Bluetooth", let artwork = notice.airPodsArtwork {
-                        SystemAirPodsGlyph(artwork: artwork, fallback: notice.kind.symbol,
-                                           connected: notice.connected, size: min(32, height - 2))
+                        AirPodsNoticeGlyph(notice: notice, artwork: artwork, model: model, size: min(32, height - 2))
                             .id(notice.id)
                     } else {
                         Image(systemName: notice.kind.symbol).font(.system(size: 26, weight: .medium)).opacity(notice.connected ? 1 : 0.4)

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2 (build 68)
+
+- The AirPods connection notice now plays one full rotation of the system pairing animation and dismisses when playback ends. Battery details stay open while you’re viewing them.
+
 ## 1.0.1 (build 67)
 
 - Removed Dynanotch’s built-in timers. Use Apple’s Clock app to set timers.

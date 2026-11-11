@@ -1,6 +1,6 @@
 # Dynanotch
 
-**Version 1.0.1**
+**Version 1.0.2**
 
 A SwiftUI and AppKit app that turns the MacBook camera notch into an interactive spot for media, device battery information, and system controls. Dynanotch draws its own interface. It runs without patches to macOS or changes to SIP.
 
@@ -8,7 +8,7 @@ A SwiftUI and AppKit app that turns the MacBook camera notch into an interactive
 
 ## See it in action
 
-The demo shows the notch expanding and collapsing, artwork flipping on a track change, play and pause transitions, and the AirPods bubble opening to show battery details. [Watch the MP4](docs/images/dynanotch-motion.mp4).
+The demo shows the notch expanding and collapsing, the cover flipping at about 0:02, play and pause transitions, and the AirPods bubble opening to show battery details. [Watch the 60 fps MP4](docs/images/dynanotch-motion.mp4).
 
 ![Animated preview of Dynanotch expanding, changing tracks, and opening the AirPods battery pill](docs/images/dynanotch-motion.gif)
 
@@ -34,7 +34,7 @@ These screenshots are rendered by Dynanotch using sample media and battery readi
 
 - **Now playing.** Expand the notch to see artwork, scrolling track information, a seek bar, and playback controls for Music and Spotify. Music also supports favorites and AirPlay output selection. Track changes flip the cover in place, and the waveform and progress bar take their accent from the artwork.
 - **Audio from other apps.** Browser and other supported app audio can show an app icon and live waveform. Dynanotch does not read individual browser tabs for track metadata or playback controls.
-- **AirPods.** Connection notices use the pairing animation available on your Mac and show the reported listening battery level. Click the left AirPods satellite to expand the same pill and see separate case, left, and right readings. Headphones such as AirPods Max show a single reading. Missing readings stay unavailable.
+- **AirPods.** Connection notices show the reported listening battery level and play one rotation of the pairing animation before dismissing. Click the left AirPods satellite to keep the pill open and see separate case, left, and right readings. Headphones such as AirPods Max show a single reading. Missing readings stay unavailable.
 - **Charging and volume.** Charging and volume can use their own trailing pill when the main notch is occupied. Volume changes during playback keep the artwork visible; an × marks mute.
 
 ## Download

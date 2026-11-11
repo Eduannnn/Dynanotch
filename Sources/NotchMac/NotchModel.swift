@@ -64,6 +64,7 @@ struct SystemOSD: Equatable {
     @Published private(set) var previewAirPodsBatteryDetails: AirPodsBatteryDetails?
     @Published private(set) var heldAirPodsNotice: DeviceNotice.ID?
     private var noticeDeadlines: [DeviceNotice.ID: TimeInterval] = [:]
+    private var completedAirPodsRotation: DeviceNotice.ID?
     private var pointerInside = false
     // Keep the upstream QML's uiScale (0.58), panel dimensions and calibrated 2 pt safety inset.
     let uiScale: CGFloat = 0.58
@@ -299,6 +300,7 @@ struct SystemOSD: Equatable {
         osdWork?.cancel(); osd = nil
         noticeTimer?.invalidate(); noticeTimer = nil; notices = NoticeQueue()
         noticeDeadlines.removeAll()
+        completedAirPodsRotation = nil
         heldAirPodsNotice = nil
         pinned = true; hovering = true; peek = false
     }
@@ -318,7 +320,9 @@ struct SystemOSD: Equatable {
 
     func enqueue(_ notice: DeviceNotice) {
         guard preferences.showNotices else { return }
-        if !notice.connected, heldAirPodsNotice == notice.key + "/on" {
+        let connectedID = notice.key + "/on"
+        if !notice.connected,
+           heldAirPodsNotice == connectedID || (mainNotice?.id == connectedID && notice.airPodsArtwork != nil) {
             if let id = heldAirPodsNotice { noticeDeadlines.removeValue(forKey: id) }
             heldAirPodsNotice = nil
             notices.dismiss(key: notice.key)
@@ -337,6 +341,36 @@ struct SystemOSD: Equatable {
 
     func closeAirPodsDetails() {
         if let id = heldAirPodsNotice { holdAirPodsNotice(id, open: false) }
+    }
+
+    func shouldPlayAirPodsMovie(_ id: DeviceNotice.ID) -> Bool {
+        completedAirPodsRotation != id
+    }
+
+    func airPodsMovieReady(_ id: DeviceNotice.ID, duration: TimeInterval) {
+        guard mainNotice?.id == id, noticeDeadlines[id] != nil, shouldPlayAirPodsMovie(id) else { return }
+        let allowance = duration.isFinite && duration > 0 ? max(SystemAirPodsArtwork.playbackWatchdog, duration + 2)
+            : SystemAirPodsArtwork.playbackWatchdog
+        noticeDeadlines[id] = ProcessInfo.processInfo.systemUptime + allowance
+        updateNoticeTimer()
+    }
+
+    func airPodsMovieFailed(_ id: DeviceNotice.ID) {
+        guard mainNotice?.id == id, let deadline = noticeDeadlines[id] else { return }
+        noticeDeadlines[id] = min(deadline, ProcessInfo.processInfo.systemUptime + 2)
+        updateNoticeTimer()
+    }
+
+    func airPodsMovieEnded(_ id: DeviceNotice.ID) {
+        guard mainNotice?.id == id, shouldPlayAirPodsMovie(id) else { return }
+        if heldAirPodsNotice == id {
+            completedAirPodsRotation = id
+            noticeDeadlines[id] = ProcessInfo.processInfo.systemUptime
+        } else {
+            noticeDeadlines.removeValue(forKey: id)
+            notices.expire(id: id)
+        }
+        updateNoticeTimer()
     }
 
     func holdAirPodsNotice(_ id: DeviceNotice.ID, open: Bool) {
@@ -365,13 +399,17 @@ struct SystemOSD: Equatable {
         let visible = pairedConnectionNotices.map { [$0.charging, $0.airPods] } ?? [current]
         let visibleIDs = Set(visible.map(\.id))
         noticeDeadlines = noticeDeadlines.filter { visibleIDs.contains($0.key) }
+        if let completedAirPodsRotation, !visibleIDs.contains(completedAirPodsRotation) {
+            self.completedAirPodsRotation = nil
+        }
         let now = ProcessInfo.processInfo.systemUptime
         for notice in visible where noticeDeadlines[notice.id] == nil {
             let duration: TimeInterval
             if notice.kind == .charging {
                 duration = 2
-            } else if notice.airPodsArtwork != nil {
-                duration = 3
+            } else if let artwork = notice.airPodsArtwork {
+                duration = notice.connected && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                    && SystemAirPodsArtwork.url(for: artwork) != nil ? SystemAirPodsArtwork.playbackWatchdog : 3
             } else {
                 duration = 4
             }
@@ -382,6 +420,7 @@ struct SystemOSD: Equatable {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.noticeDeadlines.removeValue(forKey: next.key)
+                if self.completedAirPodsRotation == next.key { self.completedAirPodsRotation = nil }
                 self.notices.expire(id: next.key)
                 self.updateNoticeTimer()
             }
@@ -408,6 +447,7 @@ struct SystemOSD: Equatable {
         let replacingCurrent = notices.current?.key == key
         if let preview = ([notices.current].compactMap { $0 } + notices.pending).first(where: { $0.key == key }) {
             noticeDeadlines.removeValue(forKey: preview.id)
+            if completedAirPodsRotation == preview.id { completedAirPodsRotation = nil }
         }
         notices.dismiss(key: key)
         enqueue(.init(key: key, name: name, kind: artwork.family == .airpodsMax ? .headphones : .earbuds,

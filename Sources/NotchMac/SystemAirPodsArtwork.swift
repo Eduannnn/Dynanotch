@@ -6,6 +6,7 @@ import NotchCore
 /// Paths only: Apple's pairing movies remain in the installed macOS bundle.
 @MainActor enum SystemAirPodsArtwork {
     static let root = URL(fileURLWithPath: "/System/Library/CoreServices/BluetoothUIService.app/Contents/Resources", isDirectory: true)
+    static let playbackWatchdog: TimeInterval = 8
     private static var posters: [URL: NSImage] = [:]
 
     static func url(for artwork: AirPodsArtwork) -> URL? {
@@ -53,36 +54,51 @@ struct SystemAirPodsGlyph: View {
     var fallback: String
     var connected: Bool
     var size: CGFloat
+    var playMovie = true
+    var onPlaybackReady: (TimeInterval) -> Void = { _ in }
+    var onPlaybackEnd: () -> Void = {}
+    var onPlaybackFailure: () -> Void = {}
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var poster: NSImage?
     @State private var playing = false
     @State private var failed = false
+    @State private var finished = false
 
     var body: some View {
         ZStack {
-            if !playing || reduceMotion || !connected || failed {
+            if !playing || !playMovie || reduceMotion || !connected || failed || finished {
                 if let image = poster ?? SystemAirPodsArtwork.cachedPoster(for: artwork) {
                     Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
                 } else {
                     Image(systemName: fallback).font(.system(size: 26, weight: .medium))
                 }
             }
-            if !reduceMotion, connected, !failed, let url = SystemAirPodsArtwork.url(for: artwork) {
-                PairingMovie(url: url, onReady: { playing = true }, onFailure: { failed = true; playing = false })
+            if playMovie, !reduceMotion, connected, !failed, !finished, let url = SystemAirPodsArtwork.url(for: artwork) {
+                PairingMovie(url: url, onReady: { duration in
+                    playing = true
+                    onPlaybackReady(duration)
+                }, onEnd: {
+                    finished = true
+                    onPlaybackEnd()
+                }, onFailure: {
+                    failed = true; playing = false
+                    onPlaybackFailure()
+                })
                     .opacity(playing ? 1 : 0)
             }
         }
         .frame(width: size, height: size).opacity(connected ? 1 : 0.4)
         .allowsHitTesting(false).accessibilityHidden(true)
         .task(id: artwork) { poster = await SystemAirPodsArtwork.poster(for: artwork) }
-        .onChange(of: artwork) { _, _ in playing = false; failed = false }
+        .onChange(of: artwork) { _, _ in playing = false; failed = false; finished = false }
         .onChange(of: reduceMotion) { _, _ in playing = false }
     }
 }
 
 private struct PairingMovie: NSViewRepresentable {
     var url: URL
-    var onReady: () -> Void
+    var onReady: (TimeInterval) -> Void
+    var onEnd: () -> Void
     var onFailure: () -> Void
 
     final class MovieView: NSView {
@@ -100,14 +116,17 @@ private struct PairingMovie: NSViewRepresentable {
     }
     final class Coordinator {
         var url: URL?
-        var player: AVQueuePlayer?
-        var looper: AVPlayerLooper?
+        var player: AVPlayer?
         var readyObservation: NSKeyValueObservation?
         var failureObservation: NSKeyValueObservation?
+        var playbackObservers: [NSObjectProtocol] = []
+        var reportedReady = false
         func stop() {
             readyObservation = nil; failureObservation = nil
-            player?.pause(); looper?.disableLooping(); player?.removeAllItems()
-            looper = nil; player = nil; url = nil
+            playbackObservers.forEach { NotificationCenter.default.removeObserver($0) }
+            playbackObservers.removeAll()
+            player?.pause(); player?.replaceCurrentItem(with: nil)
+            player = nil; url = nil; reportedReady = false
         }
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -116,16 +135,36 @@ private struct PairingMovie: NSViewRepresentable {
         let state = context.coordinator
         guard state.url != url else { return }
         state.stop(); state.url = url
-        let player = AVQueuePlayer()
+        let item = AVPlayerItem(url: url)
+        let player = AVPlayer(playerItem: item)
         player.isMuted = true
-        let looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: url))
-        state.player = player; state.looper = looper; view.video.player = player
-        state.readyObservation = view.video.observe(\.isReadyForDisplay, options: [.initial, .new]) { layer, _ in
-            if layer.isReadyForDisplay { DispatchQueue.main.async { onReady() } }
+        player.actionAtItemEnd = .pause
+        state.player = player; view.video.player = player
+        state.readyObservation = view.video.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak state, weak player] layer, _ in
+            guard layer.isReadyForDisplay else { return }
+            DispatchQueue.main.async {
+                guard let state, let player, state.player === player, !state.reportedReady else { return }
+                state.reportedReady = true
+                onReady(player.currentItem?.duration.seconds ?? .nan)
+            }
         }
-        state.failureObservation = looper.observe(\.status, options: [.initial, .new]) { loop, _ in
-            if loop.status == .failed { DispatchQueue.main.async { onFailure() } }
+        state.failureObservation = item.observe(\.status, options: [.initial, .new]) { [weak state, weak player] item, _ in
+            guard item.status == .failed else { return }
+            DispatchQueue.main.async {
+                guard let state, let player, state.player === player else { return }
+                onFailure()
+            }
         }
+        state.playbackObservers = [
+            NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak state, weak player] _ in
+                guard let state, let player, state.player === player else { return }
+                onEnd()
+            },
+            NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak state, weak player] _ in
+                guard let state, let player, state.player === player else { return }
+                onFailure()
+            }
+        ]
         player.play()
     }
     static func dismantleNSView(_ view: MovieView, coordinator: Coordinator) {

@@ -175,6 +175,24 @@ import NotchCore
             render(musicLayout, output.appendingPathComponent("airpods-expanded-battery.png"), width: 800)
             musicLayout.holdAirPodsNotice(id, open: false)
         }
+        let inlineLayout = NotchModel(preferences: Preferences(defaults: defaults))
+        inlineLayout.previewNotice()
+        let playbackWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 540, height: 140),
+                                      styleMask: [.borderless], backing: .buffered, defer: false)
+        playbackWindow.isReleasedWhenClosed = false
+        playbackWindow.ignoresMouseEvents = true
+        playbackWindow.alphaValue = 0.02
+        playbackWindow.contentView = NSHostingView(rootView: VStack(spacing: 0) {
+            NotchRootView(model: musicLayout).frame(width: 540, height: 70, alignment: .top).clipped()
+            NotchRootView(model: inlineLayout).frame(width: 540, height: 70, alignment: .top).clipped()
+        })
+        playbackWindow.orderFrontRegardless()
+        let expectsMovie = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            && SystemAirPodsArtwork.url(for: .airpodsPro) != nil
+        var survivesOldCutoff = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+            survivesOldCutoff = !expectsMovie || (musicLayout.leadingAirPods != nil && inlineLayout.mainNotice != nil)
+        }
         let morphModel = NotchModel(preferences: Preferences(defaults: defaults))
         morphModel.cameraWidth = 208; morphModel.cameraHeight = 37.5; morphModel.availableWidth = 1710
         morphModel.media.setPreview(true)
@@ -244,9 +262,13 @@ import NotchCore
         motion.update(expanded, screen: NSScreen.main)
         DispatchQueue.main.asyncAfter(deadline: .now()+0.08) { motion.update(compact, screen: NSScreen.main) }
         DispatchQueue.main.asyncAfter(deadline: .now()+0.16) { motion.update(expanded, screen: NSScreen.main) }
-        DispatchQueue.main.asyncAfter(deadline: .now()+4.2) {
+        // The installed loop is six seconds. Finish this check before the playback watchdog can expire.
+        DispatchQueue.main.asyncAfter(deadline: .now()+7.5) {
             let motionSettled = !motion.isAnimating && abs(motion.surface.width-expanded.width) < 0.1
             let bothNoticesExpired = musicLayout.notices.current == nil && musicLayout.notices.pending.isEmpty
+            let inlineNoticeExpired = inlineLayout.notices.current == nil
+            playbackWindow.orderOut(nil)
+            inlineLayout.stop()
             musicLayout.stop()
             window.orderOut(nil)
             morphModel.stop()
@@ -262,6 +284,8 @@ import NotchCore
                 "unavailableChargeStaysUnknown": unavailableChargeStaysUnknown,
                 "musicKeepsCenter": musicKeepsCenter, "musicKeepsBatteryReading": musicKeepsBatteryReading,
                 "chargeExpiresFirst": chargeExpiresFirst, "bothNoticesExpired": bothNoticesExpired,
+                "airPodsSurvivesOldCutoff": survivesOldCutoff, "inlineAirPodsExpired": inlineNoticeExpired,
+                "testedNativeAirPodsMovie": expectsMovie,
                 "pairedNoticeKeepsVolumeSeparate": pairedNoticeKeepsVolumeSeparate,
                 "trackChangeStaysCollapsed": trackChangeStaysCollapsed,
                 "noticeDisplacesMedia": noticeDisplacesMedia, "bubbleRestoresMedia": bubbleRestoresMedia,
@@ -271,6 +295,7 @@ import NotchCore
                 "result": motionSettled && volumeKeepsCover && volumeKeepsExpanded && pausedVolumeUsesIcon
                     && trackChangeStaysCollapsed && noticeDisplacesMedia && bubbleRestoresMedia
                     && lockedCollapses && unlockRestoresExpansion && volumePillPreservesNotice
+                    && survivesOldCutoff && inlineNoticeExpired
                     && airPodsFirst && chargerFirst && pairedNoticeKeepsVolumeSeparate && musicKeepsCenter && musicKeepsBatteryReading && chargeExpiresFirst && bothNoticesExpired && airPodsMorphPassed && nativeCombinedWins && missingCombinedUsesEarbuds && unavailableChargeStaysUnknown ? "pass" : "fail",
                 "scope": "Actual app models and renderer with preview media; no external player commands."
             ]
