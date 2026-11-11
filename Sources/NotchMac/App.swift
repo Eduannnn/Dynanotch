@@ -49,7 +49,11 @@ import Darwin
         }
         if let index = args.firstIndex(of: "--verify-app"), args.indices.contains(index + 1) {
             verificationOnly = true
-            AppVerification.run(directory: args[index + 1]); return
+            Task { @MainActor in
+                await SystemAirPodsArtwork.preload()
+                AppVerification.run(directory: args[index + 1])
+            }
+            return
         }
         if args.contains("--check-airpods-assets") {
             Task { @MainActor in

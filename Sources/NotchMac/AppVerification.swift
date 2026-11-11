@@ -164,6 +164,7 @@ import NotchCore
             && musicLayout.trailingCharge?.kind == .charging
         render(musicLayout, output.appendingPathComponent("music-with-airpods-and-charging.png"))
         musicLayout.previewNotice(battery: 0.75)
+        render(musicLayout, output.appendingPathComponent("airpods-connected-with-music-and-charging.png"))
         let nativeCombinedWins = AirPodsBatteryDetails(left: 0.68, right: 0.43,
                                                        chargingCase: 0.92, combined: 0.45).listeningLevel == 0.45
         let missingCombinedUsesEarbuds = AirPodsBatteryDetails(left: 0.68, right: 0.43,

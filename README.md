@@ -6,6 +6,22 @@ A SwiftUI and AppKit app that turns the MacBook camera notch into an interactive
 
 ![Expanded player showing sample track artwork, a progress bar, and playback controls](docs/images/player.jpg)
 
+## See it in action
+
+**AirPods connected while music is playing.** The connection bubble appears on the left, music stays in the center, and the MacBook’s charging pill sits on the right.
+
+![Compact music notch with an AirPods connection bubble on the left and a charging pill on the right](docs/images/airpods-connected.png)
+
+**Click the AirPods bubble for battery details.** The bubble grows into a pill with separate case, left, and right readings. AirPods Max shows a single reading.
+
+![Expanded AirPods battery pill showing three separate battery readings beside the compact player and charging pill](docs/images/airpods-battery-details.png)
+
+These screenshots are rendered by Dynanotch using sample media and battery readings.
+
+**Where the physical notch sits.** The dashed outline marks the camera cutout on a notched MacBook. Artwork and the waveform stay on either side, with AirPods and charging in separate bubbles farther out.
+
+![Layout diagram showing the physical camera notch between the artwork and waveform, flanked by the AirPods and charging bubbles](docs/images/physical-notch-layout.svg)
+
 ## What it does
 
 - **Now playing.** Expand the notch to see artwork, scrolling track information, a seek bar, and playback controls for Music and Spotify. Music also supports favorites and AirPlay output selection. Track changes flip the cover in place, and the waveform and progress bar take their accent from the artwork.
@@ -14,16 +30,35 @@ A SwiftUI and AppKit app that turns the MacBook camera notch into an interactive
 - **Charging and volume.** Charging and volume can use their own trailing pill when the main notch is occupied. Volume changes during playback keep the artwork visible; an × marks mute.
 - **Timers.** Start a Dynanotch timer from Settings → Activities. These timers are separate from Clock. Dynanotch does not import other apps’ Live Activities.
 
-## Build and run
+## Download
 
-Use a Mac with macOS 14.4 or later, Xcode with Swift 6, and a valid Apple Development or Developer ID Application signing identity in Keychain. The current build was tested on Apple Silicon. Liquid Glass requires macOS 26 or later.
+Get the precompiled Apple Silicon ZIP from the [v1.0.0 release](https://github.com/Eduannnn/Dynanotch/releases/tag/v1.0.0). Unzip it and move **Dynanotch.app** to Applications. The download is ad hoc signed and is not notarized, so macOS may block it. A signed local build is the alternative and is recommended if you plan to keep updating from source.
+
+Dynanotch targets macOS 14.4 or later and was tested on Apple Silicon. Liquid Glass requires macOS 26 or later.
+
+## Build from source
+
+Use Xcode with Swift 6 and an Apple Development or Developer ID Application signing identity in Keychain. For an Apple Development identity, open Xcode → Settings → Accounts → Manage Certificates. Get the source ZIP from the release, or clone the repository:
+
+```sh
+git clone https://github.com/Eduannnn/Dynanotch.git
+cd Dynanotch
+```
+
+### Option 1: Build in Terminal
 
 ```sh
 ./Scripts/build-app.sh
 open Build/Dynanotch.app
 ```
 
-The script builds a release app and verifies its signature. If you have several valid certificates, set `DYNANOTCH_SIGNING_IDENTITY` to the installed identity’s fingerprint or put the fingerprint in the ignored `.signing-identity` file. For direct Xcode builds, see [stable signing](docs/stable-signing.md). The build is for local use and is not notarized.
+The script builds a release app and verifies its signature. If you have several valid certificates, select one using `DYNANOTCH_SIGNING_IDENTITY` or the ignored `.signing-identity` file. Both take the certificate fingerprint.
+
+### Option 2: Build in Xcode
+
+1. Add your team and certificate fingerprint to the ignored `Signing.local.xcconfig` file, as shown in [stable signing](docs/stable-signing.md).
+2. Open `Dynanotch.xcodeproj` and select the **Dynanotch-macOS** scheme and **My Mac**.
+3. Choose **Product → Run**. To build without launching, choose **Product → Build** and find the app in Xcode’s Products group.
 
 For everyday use, keep a single copy in Applications. Quit the running app before replacing it. Keep its bundle identifier and signing identity stable between updates to help macOS retain permission grants.
 
