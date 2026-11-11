@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.1.0 (build 65)
+## 1.0.0 (build 66) — First stable release
 
 - Fixed a playback-state race where a stale read could briefly undo a pause in the notch. Play and pause now send explicit commands and refresh state after the command completes.
 - Fine volume steps stay aligned to quarter steps even when the output device rounds the reported volume. Four fine decreases from one regular step now reach zero.
@@ -12,7 +12,7 @@
 - The waveform uses live system audio and an adaptive shared peak reference. Track metadata can update while artwork loads, and artwork-derived accents ease between colors.
 - Added per-model AirPods previews, including Max colors, missing readings, and separate sample readings for each component.
 
-## Earlier 2.1.0 development notes
+## Pre-release development notes (formerly 2.1.0)
 
 - Reduced bubble artwork to 20 points within its 34-point circle. Track changes now flip the persistent cover in place in collapsed and expanded presentations, without automatic track-change peeks.
 
