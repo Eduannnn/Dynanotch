@@ -1,0 +1,15 @@
+.build/
+.swiftpm/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+Backups/
+Build/
+
+# Local certificate selector; contains no private key.
+.signing-identity
+Signing.local.xcconfig
+
+# Generated screenshots from older local builds.
+Previews/

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Dynanotch</string>
+	<key>CFBundleExecutable</key>
+	<string>Dynanotch</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.eduannnn.quickshell-notch.mac</string>
+	<key>CFBundleName</key>
+	<string>Dynanotch</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>2.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>65</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.4</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Dynanotch reads track information and controls playback in Music and Spotify. Power actions use System Events only when you choose them.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Dynanotch analyzes system audio to animate the live waveform. Audio stays in memory and is never saved or transmitted.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Dynanotch shows notices when your paired Bluetooth devices connect or disconnect and lets you manage their connections.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Native macOS port of Eduannnn/quickshell-notch.</string>
+	<key>NSPrefersDisplaySafeAreaCompatibilityMode</key>
+	<false/>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+</dict>
+</plist>
