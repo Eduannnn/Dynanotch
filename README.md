@@ -34,7 +34,15 @@ These screenshots are rendered by Dynanotch using sample media and battery readi
 
 Get the precompiled Apple Silicon ZIP from the [v1.0.0 release](https://github.com/Eduannnn/Dynanotch/releases/tag/v1.0.0). Unzip it and move **Dynanotch.app** to Applications. The download is ad hoc signed and is not notarized, so macOS may block it. A signed local build is the alternative and is recommended if you plan to keep updating from source.
 
-Dynanotch targets macOS 14.4 or later and was tested on Apple Silicon. Liquid Glass requires macOS 26 or later.
+### macOS compatibility
+
+| Version | Status |
+| --- | --- |
+| **macOS 27.3 beta (26C5035r)** | **Supported and tested** on an M2 MacBook Air. All 20 sampled AirPods artwork cases decoded, and the native skip animations loaded and played. |
+| macOS 27.2 | Unverified. AirPods movies and native skip animations need to be checked on that build before claiming support. |
+| Other macOS versions | Not verified for this release. The deployment target is macOS 14.4; Liquid Glass requires macOS 26 or later. |
+
+The app reads optional artwork and animations from the installed macOS. Missing resources fall back to SF Symbols.
 
 ## Build from source
 
