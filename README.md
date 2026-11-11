@@ -32,7 +32,7 @@ These screenshots are rendered by Dynanotch using sample media and battery readi
 
 ## Download
 
-The precompiled Apple Silicon download is pending Developer ID signing and Apple notarization. Until it is published, use the source build instructions below. See [distribution packaging](docs/distribution.md) for the release process.
+Download the precompiled Apple Silicon ZIP from the [v1.0.0 release](https://github.com/Eduannnn/Dynanotch/releases/tag/v1.0.0). The app is ad hoc signed and unnotarized. The ZIP includes a README with commands for signing your copy using your own Apple Development certificate. You can also build and sign it from source below.
 
 ### macOS compatibility
 

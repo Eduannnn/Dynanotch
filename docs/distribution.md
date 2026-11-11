@@ -1,6 +1,6 @@
 # Distribution packaging
 
-For the precompiled download, use a **Developer ID Application** signing identity from an Apple Developer Program team. The Apple Development identity used for local builds is a different certificate. Publish the Apple Silicon ZIP only after notarization succeeds and the extracted app passes Gatekeeper assessment.
+The v1.0.0 Apple Silicon ZIP is ad hoc signed. Its bundled README explains how to sign the app for local use with your own Apple Development identity. The steps below cover a future notarized download using a **Developer ID Application** identity from an Apple Developer Program team.
 
 1. Build with `./Scripts/build-app.sh` and copy `Build/Dynanotch.app` to a separate staging folder.
 2. Sign the staged app with the Developer ID Application identity, Hardened Runtime, a secure timestamp, and `Resources/Dynanotch.entitlements`.
