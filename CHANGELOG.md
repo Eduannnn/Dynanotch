@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.3 (build 71)
+
+- The expanded player uses the same volume bar and position as the collapsed player.
+- Volume keys resume from the previous level after muting. Turning the volume all the way down still starts the next adjustment at zero.
+
 ## 1.0.2 (build 68)
 
 - Softened the pointer highlight around the notch and status bubbles.

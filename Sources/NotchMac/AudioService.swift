@@ -40,6 +40,12 @@ struct AudioOutput: Identifiable, Hashable {
     private var timer: Timer?
     private var ticks = 0
     private var initialized = false
+    // A device can retain a nonzero scalar when mute is used to reach zero.
+    private var zeroVolumeMuteReadback: Double?
+
+    var volumeForStepping: Double {
+        zeroVolumeMuteReadback == nil ? volume : 0
+    }
 
     var symbol: String {
         muted || volume == 0 ? "speaker.slash.fill" : volume < 0.34 ? "speaker.wave.1.fill" : volume < 0.67 ? "speaker.wave.2.fill" : "speaker.wave.3.fill"
@@ -75,6 +81,10 @@ struct AudioOutput: Identifiable, Hashable {
         let value: Float32 = available ? audioValue(device, kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeOutput, element: element!, fallback: 0) : 1
         let mute: UInt32 = audioValue(device, kAudioDevicePropertyMute, scope: kAudioDevicePropertyScopeOutput, fallback: 0)
         let newVolume = unit(Double(value)), newMuted = mute != 0
+        if let zeroVolumeMuteReadback,
+           changedDevice || !available || !newMuted || abs(newVolume - zeroVolumeMuteReadback) > 0.003 {
+            self.zeroVolumeMuteReadback = nil
+        }
         if initialized && (abs(volume - newVolume) > 0.002 || muted != newMuted) { onVolumeChanged?(newVolume, newMuted) }
         if volume != newVolume { volume = newVolume }
         if muted != newMuted { muted = newMuted }
@@ -96,7 +106,11 @@ struct AudioOutput: Identifiable, Hashable {
         if value == 0 {
             // Some outputs mute themselves at zero or clamp the scalar above zero.
             refresh()
-            if muted || setMuted(true) { message = ""; return true }
+            if muted || setMuted(true) {
+                zeroVolumeMuteReadback = volume > 0 ? volume : nil
+                message = ""
+                return true
+            }
             return succeeded && volume == 0
         }
         if !succeeded { message = "This output controls its own volume."; return false }

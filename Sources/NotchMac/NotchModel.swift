@@ -260,7 +260,8 @@ struct SystemOSD: Equatable {
         switch key {
         case .volumeUp, .volumeDown:
             audio.refreshNow()
-            guard audio.canAdjust, audio.setVolume(hardwareVolumeStep(audio.muted ? 0 : audio.volume, increasing: key == .volumeUp, fine: fine)) else { return false }
+            let nextVolume = hardwareVolumeStep(audio.volumeForStepping, increasing: key == .volumeUp, fine: fine)
+            guard audio.setVolume(nextVolume) else { return false }
             showOSD(.init(kind: .volume, level: audio.volume, muted: audio.muted))
         case .mute:
             audio.refreshNow()

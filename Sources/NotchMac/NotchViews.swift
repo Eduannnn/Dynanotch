@@ -274,16 +274,7 @@ struct NotchRootView: View {
                     if model.preservesMediaArtwork { Color.clear.frame(width: model.osdLeadingWidth) }
                     else { Image(systemName: osd.symbol).font(.system(size: 24, weight: .medium)).frame(width: model.osdLeadingWidth) }
                     Color.clear.frame(width: model.cameraWidth)
-                    Capsule().fill(.white.opacity(0.2)).frame(width: 55, height: 6)
-                        .overlay(alignment: .leading) { Capsule().fill(.white).frame(width: 55 * (osd.muted ? 0 : unit(osd.level)), height: 6) }
-                        .overlay {
-                            if model.preservesMediaArtwork && osd.muted {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .accessibilityHidden(true)
-                            }
-                        }
+                    NotchVolumeBar(osd: osd, showsMuteMark: model.preservesMediaArtwork)
                         .frame(width: model.osdTrailingWidth)
                         .animation(IslandMotion.shape, value: osd.level)
                 }.frame(height: model.cameraHeight).accessibilityElement(children: .ignore)
@@ -304,6 +295,29 @@ struct NotchRootView: View {
     }
 }
 
+private struct NotchVolumeBar: View {
+    static let width: CGFloat = 55
+    let osd: SystemOSD
+    let showsMuteMark: Bool
+    private let height: CGFloat = 6
+
+    var body: some View {
+        Capsule().fill(.white.opacity(0.2)).frame(width: Self.width, height: height)
+            .overlay(alignment: .leading) {
+                Capsule().fill(.white)
+                    .frame(width: osd.muted ? 0 : Self.width * unit(osd.level), height: height)
+            }
+            .overlay {
+                if showsMuteMark && osd.muted {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .accessibilityHidden(true)
+                }
+            }
+    }
+}
+
 struct ExpandedPlayerView: View {
     @ObservedObject var model: NotchModel
     @ObservedObject var media: MediaService
@@ -319,26 +333,6 @@ struct ExpandedPlayerView: View {
                 }.frame(maxWidth: .infinity, alignment: .leading)
                     .offset(y: -7)
                 WaveformView(model: model, waveform: model.waveform)
-                    .overlay(alignment: .topLeading) {
-                        if model.preservesMediaArtwork, let osd = model.osd {
-                            Capsule().fill(.white.opacity(0.22)).frame(width: 26, height: 3)
-                                .overlay(alignment: .leading) {
-                                    Capsule().fill(.white).frame(width: 26 * (osd.muted ? 0 : unit(osd.level)), height: 3)
-                                }
-                                .overlay {
-                                    if osd.muted {
-                                        Image(systemName: "xmark")
-                                            .font(.system(size: 7, weight: .bold))
-                                            .foregroundStyle(.white)
-                                            .accessibilityHidden(true)
-                                    }
-                                }
-                                .offset(y: -8)
-                                .accessibilityLabel("Volume").accessibilityValue(osd.label)
-                                .transition(.opacity)
-                        }
-                    }
-                    .animation(.easeOut(duration: 0.1), value: model.preservesMediaArtwork)
                     .offset(y: -16)
             }.padding(.horizontal, 18).padding(.top, 8)
             if let item = media.snapshot, item.canControl { SeekBar(model: model, item: item).padding(.horizontal, 24).padding(.top, 2) }
@@ -374,7 +368,22 @@ struct ExpandedPlayerView: View {
                 }
                 .padding(.horizontal, 24).frame(height: 44).padding(.top, 2)
             }
-        }.offset(y: -6)
+        }
+        .offset(y: -6)
+        .frame(width: model.bodyWidth)
+        .overlay(alignment: .top) {
+            if model.preservesMediaArtwork, let osd = model.osd {
+                let collapsedCenter = (model.cameraWidth + model.osdTrailingWidth) / 2
+                let insideEdge = (model.bodyWidth - NotchVolumeBar.width) / 2 - 4
+                NotchVolumeBar(osd: osd, showsMuteMark: true)
+                    .frame(height: model.cameraHeight)
+                    .offset(x: min(collapsedCenter, insideEdge))
+                    .animation(reduceMotion ? nil : IslandMotion.shape, value: osd.level)
+                    .accessibilityLabel("Volume").accessibilityValue(osd.label)
+                    .transition(.opacity)
+            }
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: model.preservesMediaArtwork)
     }
 }
 
