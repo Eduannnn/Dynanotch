@@ -194,7 +194,7 @@ public struct NoticeQueue: Sendable {
 }
 
 public enum Presentation: String, Sendable {
-    case idle, collapsed, peek, expanded, notice, osd, timerCollapsed, timerExpanded
+    case idle, collapsed, peek, expanded, notice, osd
     public static func resolve(osd: Bool, notice: Bool, media: Bool, hovered: Bool, scrubbing: Bool, peek: Bool) -> Presentation {
         if osd { return .osd }
         if notice { return .notice }

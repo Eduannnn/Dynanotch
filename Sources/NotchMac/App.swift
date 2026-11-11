@@ -3,6 +3,7 @@ import SwiftUI
 import ApplicationServices
 import Combine
 import Darwin
+import UserNotifications
 
 @main enum DynanotchMain {
     @MainActor static func main() {
@@ -105,6 +106,7 @@ import Darwin
             DispatchQueue.main.async { [weak self] in self?.showSettings() }
             return true
         }
+        clearRetiredCountdownNotification()
         setupMenu()
         notch = NotchPanelController(model: model)
         model.start(demo: args.contains("--demo"))
@@ -117,9 +119,22 @@ import Darwin
         }
         HUDDiagnostics.write(model: model, nonce: "startup")
         if args.contains("--expanded") { model.peek = false; model.hovering = true; model.pinned = true }
-        if args.contains("--timer") { newTimer() }
         if args.contains("--enable-waveform") { model.preferences.waveformEnabled = true }
         if args.contains("--preview-airpods") { previewNotice() }
+    }
+
+    private func clearRetiredCountdownNotification() {
+        let defaults = UserDefaults.standard
+        let countdownKey = "dynanotch.ownCountdown.v1"
+        let notificationKey = "dynanotch.timerNotificationID"
+        guard defaults.object(forKey: countdownKey) != nil || defaults.object(forKey: notificationKey) != nil else { return }
+
+        let identifier = defaults.string(forKey: notificationKey) ?? "dynanotch.ownCountdown.finished"
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [identifier])
+        center.removeDeliveredNotifications(withIdentifiers: [identifier])
+        defaults.removeObject(forKey: countdownKey)
+        defaults.removeObject(forKey: notificationKey)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -143,7 +158,6 @@ import Darwin
             row.target = self; row.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil); menu.addItem(row)
         }
         add("Settings…", #selector(showSettings), "gearshape", key: ",")
-        add("New Timer…", #selector(newTimer), "timer", key: "t")
         menu.addItem(.separator())
         add("Enable HUD Replacement…", #selector(enableHUDReplacement), "keyboard")
         add("Preview Player", #selector(togglePreview), "music.note")
@@ -170,7 +184,6 @@ import Darwin
         model.mediaKeys.requestAccess()
     }
     @objc private func togglePreview() { model.setPreview(!model.previewMode) }
-    @objc private func newTimer() { model.settingsTab = .activities; showSettings() }
     @objc private func previewNotice() {
         Task { @MainActor [weak self] in
             _ = await SystemAirPodsArtwork.poster(for: .airpodsPro)

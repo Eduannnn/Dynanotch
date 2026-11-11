@@ -1,12 +1,16 @@
 # Dynanotch
 
-**Version 1.0.0 · First stable release**
+**Version 1.0.1**
 
 A SwiftUI and AppKit app that turns the MacBook camera notch into an interactive spot for media, device battery information, and system controls. Dynanotch draws its own interface. It runs without patches to macOS or changes to SIP.
 
-![Expanded player showing sample track artwork, a progress bar, and playback controls](docs/images/player.jpg)
+![Expanded Apple Music player showing artwork, progress, Favorite, Previous, Pause, Next, and AirPlay](docs/images/player.jpg)
 
 ## See it in action
+
+The demo shows the notch expanding and collapsing, artwork flipping on a track change, play and pause transitions, and the AirPods bubble opening to show battery details. [Watch the MP4](docs/images/dynanotch-motion.mp4).
+
+![Animated preview of Dynanotch expanding, changing tracks, and opening the AirPods battery pill](docs/images/dynanotch-motion.gif)
 
 **AirPods connected while music is playing.** The connection bubble appears on the left, music stays in the center, and the MacBook’s charging pill sits on the right.
 
@@ -22,17 +26,20 @@ These screenshots are rendered by Dynanotch using sample media and battery readi
 
 ![Layout diagram showing the physical camera notch between the artwork and waveform, flanked by the AirPods and charging bubbles](docs/images/physical-notch-layout.svg)
 
+**Expanded player.** The dashed overlay shows the same physical cutout above the title. The player grows down from the screen edge, with playback controls below the cutout.
+
+![Expanded player with the physical camera notch outlined directly above the song title](docs/images/physical-notch-expanded.png)
+
 ## What it does
 
 - **Now playing.** Expand the notch to see artwork, scrolling track information, a seek bar, and playback controls for Music and Spotify. Music also supports favorites and AirPlay output selection. Track changes flip the cover in place, and the waveform and progress bar take their accent from the artwork.
 - **Audio from other apps.** Browser and other supported app audio can show an app icon and live waveform. Dynanotch does not read individual browser tabs for track metadata or playback controls.
 - **AirPods.** Connection notices use the pairing animation available on your Mac and show the reported listening battery level. Click the left AirPods satellite to expand the same pill and see separate case, left, and right readings. Headphones such as AirPods Max show a single reading. Missing readings stay unavailable.
 - **Charging and volume.** Charging and volume can use their own trailing pill when the main notch is occupied. Volume changes during playback keep the artwork visible; an × marks mute.
-- **Timers.** Start a Dynanotch timer from Settings → Activities. These timers are separate from Clock. Dynanotch does not import other apps’ Live Activities.
 
 ## Download
 
-Download the precompiled Apple Silicon ZIP from the [v1.0.0 release](https://github.com/Eduannnn/Dynanotch/releases/tag/v1.0.0). The app is ad hoc signed and unnotarized. The ZIP includes a README with commands for signing your copy using your own Apple Development certificate. You can also build and sign it from source below.
+Download the precompiled Apple Silicon ZIP from the [latest release](https://github.com/Eduannnn/Dynanotch/releases/latest). The app is ad hoc signed and unnotarized. The ZIP includes a README with commands for signing your copy using your own Apple Development certificate. You can also build and sign it from source below.
 
 ### macOS compatibility
 
@@ -81,7 +88,6 @@ For everyday use, keep a single copy in Applications. Quit the running app befor
 | Automation | Reading and controlling Music or Spotify when you use that player |
 | System audio recording | Measuring live audio for the waveform; no microphone input or recordings written to disk |
 | Accessibility | The notch Settings shortcut and optional replacement for the volume and brightness overlays |
-| Notifications | Optional alerts for Dynanotch timers |
 
 Quit Dynanotch before removing or re-granting Accessibility. See the [input incident notes](docs/incident-2026-11-10.md) for the confirmed findings and remaining uncertainty.
 

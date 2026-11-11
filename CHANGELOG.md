@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1 (build 67)
+
+- Removed Dynanotch’s built-in timers. Use Apple’s Clock app to set timers.
+
 ## 1.0.0 (build 66) — First stable release
 
 - Fixed a playback-state race where a stale read could briefly undo a pause in the notch. Play and pause now send explicit commands and refresh state after the command completes.

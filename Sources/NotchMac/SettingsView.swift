@@ -53,7 +53,6 @@ struct SettingsView: View {
     var body: some View {
         TabView(selection: $model.settingsTab) {
             general.tabItem { Label("General", systemImage: "slider.horizontal.3") }.tag(NotchModel.SettingsTab.general)
-            timerSettings.tabItem { Label("Activities", systemImage: "timer") }.tag(NotchModel.SettingsTab.activities)
             calibration.tabItem { Label("Calibration", systemImage: "viewfinder") }.tag(NotchModel.SettingsTab.calibration)
             integrations.tabItem { Label("Media & Audio", systemImage: "waveform") }.tag(NotchModel.SettingsTab.media)
         }
@@ -157,27 +156,6 @@ struct SettingsView: View {
             }
         }.formStyle(.grouped)
     }
-    private var timerSettings: some View {
-        Form {
-            Section("Timers") {
-                Text("Create a Dynanotch timer here. Its countdown appears automatically at the notch.")
-                    .font(.caption).foregroundStyle(.secondary)
-                TimerSetupView(model: model).padding(.vertical, 8)
-                if !model.timer.notificationMessage.isEmpty { Text(model.timer.notificationMessage).font(.caption).foregroundStyle(.secondary) }
-                Text("These timers belong to Dynanotch and are separate from Clock timers.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Section("Now Playing") {
-                Text("Activities appear automatically. Hover to expand temporarily, or click to pin. Escape or clicking elsewhere collapses the notch.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Section("Other Live Activities") {
-                Text("Dynanotch displays its own media, timer and device activities. Other apps’ native Live Activities are not automatically available to it.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-        }.formStyle(.grouped)
-    }
-
     private var integrations: some View {
         Form {
             Section("macOS HUD replacement") {

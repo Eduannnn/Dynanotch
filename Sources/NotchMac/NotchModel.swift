@@ -18,10 +18,7 @@ struct SystemOSD: Equatable {
 @MainActor final class NotchModel: ObservableObject {
     let preferences: Preferences
     let media = MediaService()
-    let timer: TimerService
-    enum Activity: String { case media, timer }
-    @Published private(set) var selectedActivity: Activity = .media
-    enum SettingsTab: Hashable { case general, activities, calibration, media }
+    enum SettingsTab: Hashable { case general, calibration, media }
     @Published var settingsTab: SettingsTab = .general
     @Published var pinned = false
     let audio = AudioService()
@@ -100,7 +97,7 @@ struct SystemOSD: Equatable {
     static let airPodsPillSize: CGFloat = 34
     static let airPodsExpandedWidth: CGFloat = 204
     var airPodsSatelliteWidth: CGFloat = airPodsPillSize
-    var airPodsPillOffset: CGFloat { bubbleActivity == nil ? 42 : 84 }
+    var airPodsPillOffset: CGFloat { !showsMediaBubble ? 42 : 84 }
     @Published var airPodsPillLighting = EdgeLighting()
 
     var trailingCharge: DeviceNotice? {
@@ -117,7 +114,7 @@ struct SystemOSD: Equatable {
 
     var trailingVolume: SystemOSD? {
         guard let osd, osd.kind == .volume, !screenLocked,
-              musicHasConnectionNotice || pairedConnectionNotices != nil || activityBubble(for: basePresentation) != nil else { return nil }
+              musicHasConnectionNotice || pairedConnectionNotices != nil || showsMediaBubble(for: basePresentation) else { return nil }
         return osd
     }
     static let volumePillWidth: CGFloat = 77
@@ -132,27 +129,18 @@ struct SystemOSD: Equatable {
     var collapsedHeight: CGFloat { cameraHeight + 2 }
     var osdLeadingWidth: CGFloat { preservesMediaArtwork ? compactLeadingWidth : 46 }
     var osdTrailingWidth: CGFloat { 55 + 22 }
-    var bubbleActivity: Activity? {
-        let current = presentation
-        if current == .osd && preservesMediaArtwork { return timer.exists ? .timer : nil }
-        return activityBubble(for: current)
+    var showsMediaBubble: Bool {
+        if presentation == .osd && preservesMediaArtwork { return false }
+        return showsMediaBubble(for: presentation)
     }
     // Base bubble selection is independent of volume overlay placement.
-    private func activityBubble(for presentation: Presentation) -> Activity? {
-        switch presentation {
-        case .notice, .osd:
-            if selectedActivity == .timer && timer.exists { return .timer }
-            if media.snapshot != nil { return .media }
-            return timer.exists ? .timer : nil
-        case .timerCollapsed, .timerExpanded: return media.snapshot != nil ? .media : nil
-        case .collapsed, .peek, .expanded: return timer.exists ? .timer : nil
-        case .idle: return nil
-        }
+    private func showsMediaBubble(for presentation: Presentation) -> Bool {
+        media.snapshot != nil && (presentation == .notice || presentation == .osd)
     }
 
     var presentation: Presentation {
         if osd != nil && trailingVolume == nil {
-            if !screenLocked && preservesMediaArtwork && selectedActivity == .media && (hovering || pinned || scrubbing) { return .expanded }
+            if !screenLocked && preservesMediaArtwork && (hovering || pinned || scrubbing) { return .expanded }
             return .osd
         }
         return basePresentation
@@ -160,9 +148,6 @@ struct SystemOSD: Equatable {
 
     private var basePresentation: Presentation {
         if notices.current != nil && preferences.showNotices && !musicHasConnectionNotice { return .notice }
-        if !musicHasConnectionNotice && timer.exists && (selectedActivity == .timer || media.snapshot == nil) {
-            return !screenLocked && (hovering || pinned) ? .timerExpanded : .timerCollapsed
-        }
         return .resolve(osd: false, notice: false, media: media.snapshot != nil, hovered: !screenLocked && (hovering || pinned), scrubbing: !screenLocked && scrubbing, peek: !screenLocked && peek)
     }
     var bodyWidth: CGFloat {
@@ -173,23 +158,19 @@ struct SystemOSD: Equatable {
         case .peek: requested = max(expandedWidth * 0.94, cameraWidth + 80)
         case .notice: requested = cameraWidth + noticeLeadingWidth + noticeTrailingWidth
         case .expanded: requested = max(expandedWidth, cameraWidth + 120)
-        case .timerCollapsed: requested = cameraWidth + 120
-        case .timerExpanded: requested = max(400, cameraWidth + 120)
         case .osd: requested = cameraWidth + osdLeadingWidth + osdTrailingWidth
         }
         return min(availableWidth - 32, requested)
     }
     var bodyHeight: CGFloat {
         switch presentation {
-        case .idle, .collapsed, .osd, .notice, .timerCollapsed: collapsedHeight
+        case .idle, .collapsed, .osd, .notice: collapsedHeight
         case .peek: cameraHeight + 56
         case .expanded: cameraHeight + (media.snapshot?.isBrowserAudio == true ? 84 : 138)
-        case .timerExpanded: cameraHeight + 144
         }
     }
     var bodyOffset: CGFloat {
         if presentation == .collapsed { return (compactTrailingWidth - compactLeadingWidth) / 2 }
-        if presentation == .timerCollapsed { return 12 }
         if presentation == .notice { return (noticeTrailingWidth - noticeLeadingWidth) / 2 }
         if presentation == .osd { return (osdTrailingWidth - osdLeadingWidth) / 2 }
         return 0
@@ -208,18 +189,18 @@ struct SystemOSD: Equatable {
         return notice.connected || notice.battery != nil ? 44 : 0
     }
     var radius: CGFloat { presentation == .expanded ? 70 * uiScale : presentation == .peek ? 24 : 12 }
-    var earRadius: CGFloat { [.expanded, .timerExpanded].contains(presentation) ? 12 : presentation == .peek ? 8 : 6 }
+    var earRadius: CGFloat { presentation == .expanded ? 12 : presentation == .peek ? 8 : 6 }
     var surfaceTarget: NotchSurface {
-        if bubbleActivity == .media {
+        if showsMediaBubble {
             return .init(width: bodyWidth, height: bodyHeight, offset: bodyOffset,
-                         radius: [.expanded, .timerExpanded].contains(presentation) ? 30 : radius,
+                         radius: presentation == .expanded ? 30 : radius,
                          ear: earRadius, artworkX: -25, artworkY: collapsedHeight / 2, artworkSize: 20)
         }
-        let size: CGFloat = presentation == .expanded ? 56 : presentation == .peek ? 40 : presentation == .timerCollapsed ? 24 : min(28, cameraHeight - 4)
-        let x: CGFloat = presentation == .expanded ? 46 : presentation == .peek ? 34 : presentation == .timerCollapsed ? 24 : compactLeadingWidth / 2
+        let size: CGFloat = presentation == .expanded ? 56 : presentation == .peek ? 40 : min(28, cameraHeight - 4)
+        let x: CGFloat = presentation == .expanded ? 46 : presentation == .peek ? 34 : compactLeadingWidth / 2
         let y: CGFloat = presentation == .expanded ? cameraHeight + 20 : presentation == .peek ? cameraHeight + 22 : collapsedHeight / 2
         return .init(width: bodyWidth, height: bodyHeight, offset: bodyOffset,
-                     radius: [.expanded, .timerExpanded].contains(presentation) ? 30 : radius,
+                     radius: presentation == .expanded ? 30 : radius,
                      ear: earRadius, artworkX: x, artworkY: y, artworkSize: size)
     }
     func present(_ surface: NotchSurface) { presentedSurface = surface; onSurfaceChanged?() }
@@ -235,15 +216,8 @@ struct SystemOSD: Equatable {
         IslandMotion.shape
     }
 
-    init(timer: TimerService? = nil, preferences: Preferences? = nil) {
+    init(preferences: Preferences? = nil) {
         self.preferences = preferences ?? Preferences()
-        self.timer = timer ?? TimerService()
-        let timer = self.timer
-        timer.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
-        timer.onFinished = { [weak self] in
-            self?.selectedActivity = .timer; self?.pinned = true; self?.hovering = true
-        }
-        if timer.exists { selectedActivity = .timer }
         media.$snapshot.sink { [weak self] item in
             guard let self else { return }
             self.objectWillChange.send()
@@ -279,7 +253,7 @@ struct SystemOSD: Equatable {
         mediaKeys.configure(enabled: preferences.showOSD && preferences.replaceSystemHUD && !hidden && !screenLocked)
         mediaKeys.start()
     }
-    func stop() { media.stop(); timer.stop(); mediaKeys.stop(); waveform.stop(); system.stop(); noticeTimer?.invalidate() }
+    func stop() { media.stop(); mediaKeys.stop(); waveform.stop(); system.stop(); noticeTimer?.invalidate() }
 
     private func handleHardwareKey(_ key: HardwareMediaKey, fine: Bool) -> Bool {
         switch key {
@@ -303,8 +277,8 @@ struct SystemOSD: Equatable {
         guard inside != pointerInside else { return }
         pointerInside = inside
         collapseWork?.cancel()
-        if inside && preferences.expandOnHover && (media.snapshot != nil || timer.exists)
-            && [.collapsed, .peek, .expanded, .timerCollapsed, .timerExpanded].contains(presentation) {
+        if inside && preferences.expandOnHover && media.snapshot != nil
+            && [.collapsed, .peek, .expanded].contains(presentation) {
             hovering = true
         } else if !inside {
             let work = DispatchWorkItem { [weak self] in if self?.scrubbing != true && self?.pinned != true { self?.hovering = false } }
@@ -315,26 +289,18 @@ struct SystemOSD: Equatable {
     func finishScrubbing() { scrubbing = false; if !pointerInside { hovering = false } }
     func close() {
         closeAirPodsDetails()
-        pinned = false; hovering = false; peek = false; selectedActivity = timer.exists ? .timer : .media
+        pinned = false; hovering = false; peek = false
     }
     func toggleExpansion() {
         if pinned { close() } else { pinned = true; hovering = true; peek = false }
     }
-    func focusActivity(_ activity: Activity) {
-        guard activity == .media ? media.snapshot != nil : timer.exists else { return }
-        selectedActivity = activity; pinned = true; hovering = true; peek = false
-    }
     func activateBubble() {
-        guard !screenLocked, let activity = bubbleActivity else { return }
+        guard !screenLocked, showsMediaBubble else { return }
         osdWork?.cancel(); osd = nil
         noticeTimer?.invalidate(); noticeTimer = nil; notices = NoticeQueue()
         noticeDeadlines.removeAll()
         heldAirPodsNotice = nil
-        focusActivity(activity)
-    }
-    func startTimer(seconds: Double) {
-        timer.start(seconds: seconds)
-        selectedActivity = .timer; pinned = false; hovering = false; peek = false
+        pinned = true; hovering = true; peek = false
     }
 
     func showPeek() {

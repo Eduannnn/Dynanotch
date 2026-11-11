@@ -47,9 +47,9 @@ struct NotchRootView: View {
     var body: some View {
         let surface = staticPreview ? model.surfaceTarget : motion.surface
         let playing = model.media.snapshot?.isPlaying == true
-        let expanded = [.expanded, .timerExpanded].contains(model.presentation)
+        let expanded = model.presentation == .expanded
         let mediaVisible = model.media.snapshot != nil && ([.collapsed, .peek, .expanded].contains(model.presentation)
-            || model.preservesMediaArtwork || model.bubbleActivity == .media)
+            || model.preservesMediaArtwork || model.showsMediaBubble)
         ZStack(alignment: .topLeading) {
             ZStack(alignment: .topLeading) {
                 if let charge = model.trailingCharge {
@@ -176,23 +176,17 @@ struct NotchRootView: View {
             .frame(width: Self.canvasWidth, height: Self.canvasHeight, alignment: .topLeading)
             .animation(reduceMotion || staticPreview ? nil : IslandMotion.fade, value: model.leadingAirPods?.id)
 
-            if let activity = model.bubbleActivity {
+            if model.showsMediaBubble {
                 Button { model.activateBubble() } label: {
                     Circle().fill(Color.notchSurface)
-                        .overlay {
-                            if activity == .timer {
-                                Image(systemName: model.timer.state.phase == .finished ? "timer.circle.fill" : "timer")
-                                    .font(.system(size: 20, weight: .medium)).foregroundStyle(.orange)
-                            }
-                        }
                         .overlay {
                             SpecularGlassRim(surface: Circle(), edge: Circle(), highlight: model.bubbleLighting.point,
                                              strength: model.bubbleLighting.strength, staticPreview: staticPreview)
                         }
                         .frame(width: 34, height: 34).contentShape(Circle())
                 }
-                .accessibilityLabel(activity == .media ? "Return to Now Playing" : "Return to timer")
-                .help(activity == .media ? "Return to Now Playing" : "Return to timer")
+                .accessibilityLabel("Return to Now Playing")
+                .help("Return to Now Playing")
                 .offset(x: (Self.canvasWidth - surface.width) / 2 + surface.offset - 42, y: max(0, (model.collapsedHeight - 34) / 2))
                 .transition(.opacity.animation(IslandMotion.fade))
             }
@@ -232,7 +226,7 @@ struct NotchRootView: View {
             motion.update(model.surfaceTarget, screen: model.displayScreen, immediate: true)
         }
         .onChange(of: model.surfaceTarget) { _, value in motion.update(value, screen: model.displayScreen) }
-        .onChange(of: model.bubbleActivity) { _, _ in model.onSurfaceChanged?() }
+        .onChange(of: model.showsMediaBubble) { _, _ in model.onSurfaceChanged?() }
         .onChange(of: reduceMotion) { _, _ in motion.update(model.surfaceTarget, screen: model.displayScreen, immediate: true) }
         .onChange(of: model.hidden) { _, hidden in
             if hidden { motion.stop() } else { motion.update(model.surfaceTarget, screen: model.displayScreen, immediate: true) }
@@ -272,24 +266,6 @@ struct NotchRootView: View {
             }.contentShape(Rectangle()).onTapGesture { model.toggleExpansion() }
         case .expanded:
             ExpandedPlayerView(model: model, media: model.media)
-        case .timerCollapsed:
-            HStack(spacing: 0) {
-                Button {
-                    model.focusActivity(.timer)
-                } label: {
-                    Group {
-                        Image(systemName: model.timer.state.phase == .finished ? "timer.circle.fill" : "timer").font(.system(size: 21, weight: .medium)).foregroundStyle(.orange)
-                    }.frame(width: 48, height: model.cameraHeight).contentShape(Rectangle())
-                }.accessibilityLabel("Expand timer")
-                Color.clear.frame(width: model.cameraWidth)
-                Button { model.focusActivity(.timer) } label: {
-                    Text(model.timer.state.phase == .finished ? "Done" : model.timer.displayTime)
-                        .font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundStyle(.orange)
-                        .frame(width: 72, height: model.cameraHeight).contentShape(Rectangle())
-                }.accessibilityLabel("Expand timer, \(model.timer.displayTime)")
-            }.frame(height: model.cameraHeight)
-        case .timerExpanded:
-            TimerActivityView(model: model, timer: model.timer)
         case .notice:
             if let notice = model.mainNotice { InlineNoticeView(notice: notice, model: model, cameraWidth: model.cameraWidth, leadingWidth: model.noticeLeadingWidth, trailingWidth: model.noticeTrailingWidth, height: model.cameraHeight) }
         case .osd:

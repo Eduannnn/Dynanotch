@@ -156,7 +156,7 @@ final class NotchPanel: NSPanel {
     private func isInteractive(_ point: NSPoint) -> Bool {
         if model.hidden || model.screenLocked { return false }
         if isOverAirPodsSatellite(point) { return true }
-        if model.bubbleActivity != nil,
+        if model.showsMediaBubble,
            hypot(point.x - activityBubbleRect.midX, point.y - activityBubbleRect.midY) <= 17 { return true }
         return isBodyInteractive(point)
     }
@@ -185,7 +185,7 @@ final class NotchPanel: NSPanel {
         let body = bodyRect
         let bubble = activityBubbleRect
         let lighting = model.hidden ? EdgeLighting() : EdgeLighting.response(to: point, around: body)
-        let bubbleLighting = model.hidden || model.bubbleActivity == nil ? EdgeLighting()
+        let bubbleLighting = model.hidden || !model.showsMediaBubble ? EdgeLighting()
             : EdgeLighting.response(to: point, around: bubble, reach: 80)
         let airPodsLighting = model.hidden || model.leadingAirPods == nil ? EdgeLighting()
             : EdgeLighting.response(to: point, around: airPodsSatelliteRect, reach: 80)

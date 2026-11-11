@@ -1,8 +1,8 @@
 # Activity handoff and lock-screen display
 
-Notices and foreground activities can displace ongoing media/timers into one leading bubble. The existing persistent artwork view moves to its bubble position through the surface spring; it is not duplicated. Clicking the bubble dismisses transient overlays and expands that activity. The former Wi-Fi/battery indicator is removed.
+Device notices can move Now Playing into a leading bubble. The album artwork moves with the surface spring. Clicking the bubble dismisses the notice and expands the player.
 
-`Build/ActivityHandoffCheck/` contains successful owned-model checks and renders for notice → media bubble → restored player, timer/media handoff, compact lock-state selection and restored expansion after unlock. Pause shrink/dim and a 150 ms waveform settle were separately captured in `Build/PausedArtworkCheck/` and `Build/WaveformSettleCheck/`; the waveform rendering test used recorded measured levels, not live playback.
+`Build/ActivityHandoffCheck/` contains checks for a device notice moving media into a bubble, restoring the player, and collapsing and restoring the layout across a simulated lock and unlock. The waveform rendering check in `Build/WaveformSettleCheck/` used recorded audio levels.
 
 Lock-screen configuration uses public `NSWindow.canBecomeVisibleWithoutLogin` (declared in the installed AppKit NSWindow.h) and a screen-saver window level while the normal lock notification is active. The panel is noninteractive while locked; it does not become key, open settings, expand or filter hardware keys. Normal window level and interaction return on unlock. The setting can be disabled in General Settings.
 

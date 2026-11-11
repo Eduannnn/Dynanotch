@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import NotchCore
 
-/// Runs the real models and renderer with isolated timer storage and no device/media side effects.
+/// Runs the real models and renderer with isolated preferences and no device/media side effects.
 @MainActor enum AppVerification {
     static func runNativeSkips(directory: String) {
         let output = URL(fileURLWithPath: directory, isDirectory: true)
@@ -74,8 +74,7 @@ import NotchCore
         try? FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         let suite = "com.eduannnn.dynanotch.visual-check." + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
-        let timer = TimerService(defaults: defaults, allowsNotifications: false)
-        let model = NotchModel(timer: timer, preferences: Preferences(defaults: defaults))
+        let model = NotchModel(preferences: Preferences(defaults: defaults))
         model.cameraWidth = 208; model.cameraHeight = 37.5; model.availableWidth = 1710
         model.displayScreen = NSScreen.main
         model.media.setPreview(true); model.pinned = true; model.hovering = true
@@ -108,8 +107,7 @@ import NotchCore
         try? FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         let suite = "com.eduannnn.dynanotch.verification." + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
-        let timer = TimerService(defaults: defaults, allowsNotifications: false)
-        let model = NotchModel(timer: timer, preferences: Preferences(defaults: defaults))
+        let model = NotchModel(preferences: Preferences(defaults: defaults))
         model.cameraWidth = 208; model.cameraHeight = 37.5; model.availableWidth = 1710
         model.media.setPreview(true); model.peek = false; model.hovering = true; model.pinned = true
         render(model, output.appendingPathComponent("music-expanded.png"))
@@ -131,35 +129,35 @@ import NotchCore
         model.osd = nil; model.media.command("playpause")
         model.media.command("playpause")
         model.close(); model.previewNotice()
-        let noticeDisplacesMedia = model.presentation == .notice && model.bubbleActivity == .media
+        let noticeDisplacesMedia = model.presentation == .notice && model.showsMediaBubble
             && model.surfaceTarget.artworkX < 0
         render(model, output.appendingPathComponent("notice-with-media-bubble.png"))
         model.osd = .init(kind: .volume, level: 0.6, muted: false)
         let volumePillPreservesNotice = model.trailingVolume?.level == 0.6
-            && model.presentation == .notice && model.bubbleActivity == .media
+            && model.presentation == .notice && model.showsMediaBubble
         render(model, output.appendingPathComponent("notice-with-volume-pill.png"))
         model.osd = nil
         model.previewCharging()
         let airPodsFirst = model.mainNotice?.airPodsArtwork != nil
-            && model.trailingCharge?.kind == .charging && model.bubbleActivity == .media
+            && model.trailingCharge?.kind == .charging && model.showsMediaBubble
         render(model, output.appendingPathComponent("airpods-with-charging-pill.png"))
         model.activateBubble()
         model.previewCharging()
         model.previewNotice()
         let chargerFirst = model.mainNotice?.airPodsArtwork != nil
-            && model.trailingCharge?.kind == .charging && model.bubbleActivity == .media
+            && model.trailingCharge?.kind == .charging && model.showsMediaBubble
         model.osd = .init(kind: .volume, level: 0.6, muted: false)
         let pairedNoticeKeepsVolumeSeparate = model.trailingVolume != nil
             && model.volumePillExtraOffset == NotchModel.chargePillWidth + NotchModel.volumePillGap
         model.activateBubble()
-        let bubbleRestoresMedia = model.presentation == .expanded && model.notices.current == nil && model.bubbleActivity == nil
+        let bubbleRestoresMedia = model.presentation == .expanded && model.notices.current == nil && !model.showsMediaBubble
         model.media.command("playpause")
         let musicLayout = NotchModel(preferences: Preferences(defaults: defaults))
         musicLayout.cameraWidth = 208; musicLayout.cameraHeight = 37.5; musicLayout.availableWidth = 1710
         musicLayout.media.setPreview(true)
         musicLayout.previewCharging()
         musicLayout.previewNotice(battery: nil)
-        let musicKeepsCenter = musicLayout.presentation == .collapsed && musicLayout.bubbleActivity == nil
+        let musicKeepsCenter = musicLayout.presentation == .collapsed && !musicLayout.showsMediaBubble
             && musicLayout.leadingAirPods?.airPodsArtwork != nil && musicLayout.leadingAirPods?.battery == nil
             && musicLayout.trailingCharge?.kind == .charging
         render(musicLayout, output.appendingPathComponent("music-with-airpods-and-charging.png"))
@@ -240,24 +238,6 @@ import NotchCore
         let lockedCollapses = model.presentation == .collapsed
         model.screenLocked = false
         let unlockRestoresExpansion = model.presentation == .expanded
-        timer.start(seconds: 3, notifications: false); model.focusActivity(.timer)
-        let timerDisplacesMedia = model.bubbleActivity == .media
-        model.focusActivity(.media)
-        let mediaDisplacesTimer = model.bubbleActivity == .timer
-        render(model, output.appendingPathComponent("media-with-timer-bubble.png"))
-        model.focusActivity(.timer)
-        render(model, output.appendingPathComponent("timer-running.png"))
-        let timerPresentation = model.presentation
-        model.osd = .init(kind: .volume, level: 0.6, muted: false)
-        let volumePillPreservesTimer = model.presentation == timerPresentation
-            && model.bubbleActivity == .media && model.trailingVolume?.level == 0.6
-        render(model, output.appendingPathComponent("timer-with-volume-pill.png"))
-        model.osd = nil
-        timer.togglePause()
-        let paused = timer.state.phase == .paused && timer.remaining > 0
-        render(model, output.appendingPathComponent("timer-paused.png"))
-        timer.togglePause()
-
         let motion = NotchAnimationCoordinator()
         let expanded = NotchSurface(width: 400, height: 193.5, offset: 0, radius: 30, ear: 12)
         motion.update(compact, screen: NSScreen.main, immediate: true)
@@ -265,12 +245,6 @@ import NotchCore
         DispatchQueue.main.asyncAfter(deadline: .now()+0.08) { motion.update(compact, screen: NSScreen.main) }
         DispatchQueue.main.asyncAfter(deadline: .now()+0.16) { motion.update(expanded, screen: NSScreen.main) }
         DispatchQueue.main.asyncAfter(deadline: .now()+4.2) {
-            let expired = timer.state.phase == .finished && timer.remaining == 0
-            render(model, output.appendingPathComponent("timer-finished.png"))
-            timer.restart()
-            let repeated = timer.state.phase == .running && timer.remaining == 3
-            timer.cancel()
-            let cancelled = !timer.exists
             let motionSettled = !motion.isAnimating && abs(motion.surface.width-expanded.width) < 0.1
             let bothNoticesExpired = musicLayout.notices.current == nil && musicLayout.notices.pending.isEmpty
             musicLayout.stop()
@@ -280,9 +254,8 @@ import NotchCore
             let diagnostics: [String: Any] = [
                 "airPodsMorphIntermediate": sawIntermediateWidth, "airPodsMorphReopened": reopened,
                 "airPodsMorphCollapsed": collapsedAgain, "airPodsMorphDisconnected": disconnected,
-                "timerPause": paused, "timerExpiry": expired, "timerRepeat": repeated, "timerCancel": cancelled,
                 "volumeKeepsCover": volumeKeepsCover, "volumeKeepsExpanded": volumeKeepsExpanded,
-                "pausedVolumeUsesIcon": pausedVolumeUsesIcon, "volumePillPreservesTimer": volumePillPreservesTimer,
+                "pausedVolumeUsesIcon": pausedVolumeUsesIcon,
                 "volumePillPreservesNotice": volumePillPreservesNotice,
                 "airPodsFirst": airPodsFirst, "chargerFirst": chargerFirst,
                 "nativeCombinedWins": nativeCombinedWins, "missingCombinedUsesEarbuds": missingCombinedUsesEarbuds,
@@ -292,21 +265,20 @@ import NotchCore
                 "pairedNoticeKeepsVolumeSeparate": pairedNoticeKeepsVolumeSeparate,
                 "trackChangeStaysCollapsed": trackChangeStaysCollapsed,
                 "noticeDisplacesMedia": noticeDisplacesMedia, "bubbleRestoresMedia": bubbleRestoresMedia,
-                "timerDisplacesMedia": timerDisplacesMedia, "mediaDisplacesTimer": mediaDisplacesTimer,
                 "lockedCollapses": lockedCollapses, "unlockRestoresExpansion": unlockRestoresExpansion,
                 "motionSettled": motionSettled, "motionFrames": motion.frameCount,
                 "finalWidth": motion.surface.width, "finalHeight": motion.surface.height,
-                "result": paused && expired && repeated && cancelled && motionSettled && volumeKeepsCover && volumeKeepsExpanded && pausedVolumeUsesIcon
-                    && trackChangeStaysCollapsed && noticeDisplacesMedia && bubbleRestoresMedia && timerDisplacesMedia && mediaDisplacesTimer
-                    && lockedCollapses && unlockRestoresExpansion && volumePillPreservesTimer && volumePillPreservesNotice
+                "result": motionSettled && volumeKeepsCover && volumeKeepsExpanded && pausedVolumeUsesIcon
+                    && trackChangeStaysCollapsed && noticeDisplacesMedia && bubbleRestoresMedia
+                    && lockedCollapses && unlockRestoresExpansion && volumePillPreservesNotice
                     && airPodsFirst && chargerFirst && pairedNoticeKeepsVolumeSeparate && musicKeepsCenter && musicKeepsBatteryReading && chargeExpiresFirst && bothNoticesExpired && airPodsMorphPassed && nativeCombinedWins && missingCombinedUsesEarbuds && unavailableChargeStaysUnknown ? "pass" : "fail",
-                "scope": "Actual app models and renderer with preview media; no external player commands or notification permissions."
+                "scope": "Actual app models and renderer with preview media; no external player commands."
             ]
             if let data = try? JSONSerialization.data(withJSONObject: diagnostics, options: [.prettyPrinted, .sortedKeys]) {
                 try? data.write(to: output.appendingPathComponent("result.json"))
                 print(String(decoding: data, as: UTF8.self))
             }
-            motion.stop(); timer.stop(); defaults.removePersistentDomain(forName: suite)
+            motion.stop(); model.stop(); defaults.removePersistentDomain(forName: suite)
             NSApp.terminate(nil)
         }
     }

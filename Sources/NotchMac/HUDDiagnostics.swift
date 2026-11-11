@@ -25,7 +25,7 @@ import ApplicationServices
             "mediaPlaying": model.media.snapshot?.isPlaying ?? false,
             "presentation": String(describing: model.presentation),
             "notice": model.notices.current?.key ?? "none",
-            "activityBubble": model.bubbleActivity?.rawValue ?? "none",
+            "activityBubble": model.showsMediaBubble ? "media" : "none",
             "screenLocked": model.screenLocked,
             "showOnLockScreen": model.preferences.showOnLockScreen,
             "visibleWithoutLoginConfigured": model.configuredVisibleWithoutLogin,
