@@ -44,7 +44,7 @@ struct SpecularGlassRim<Surface: Shape, Edge: Shape>: View {
                     edge.stroke(RadialGradient(colors: [.white.opacity(0.48), .white.opacity(0.10), .clear],
                         center: center, startRadius: 0, endRadius: reach), lineWidth: 0.8)
                 }
-                    .opacity(strength * 0.9)
+                    .opacity(strength * 0.72)
                     .animation(reduceMotion ? nil : .easeOut(duration: 0.10), value: highlight)
                     .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: strength)
             }
