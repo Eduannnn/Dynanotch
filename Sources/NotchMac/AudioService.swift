@@ -101,24 +101,27 @@ struct AudioOutput: Identifiable, Hashable {
         var succeeded = AudioObjectSetPropertyData(selectedDevice, &address, 0, nil, UInt32(MemoryLayout<Float32>.size), &value) == noErr
         if element == 1 {
             address.mElement = 2
-            if AudioObjectHasProperty(selectedDevice, &address) { succeeded = (AudioObjectSetPropertyData(selectedDevice, &address, 0, nil, UInt32(MemoryLayout<Float32>.size), &value) == noErr) && succeeded }
+            if AudioObjectHasProperty(selectedDevice, &address) {
+                let rightSucceeded = AudioObjectSetPropertyData(selectedDevice, &address, 0, nil,
+                    UInt32(MemoryLayout<Float32>.size), &value) == noErr
+                succeeded = succeeded || rightSucceeded
+            }
         }
+        refresh()
         if value == 0 {
-            // Some outputs mute themselves at zero or clamp the scalar above zero.
-            refresh()
-            if muted || setMuted(true) {
+            // Some outputs clamp the scalar above zero. Mute is a second way to reach silence.
+            let didMute = muted ? false : setMuted(true)
+            if muted || didMute {
                 zeroVolumeMuteReadback = volume > 0 ? volume : nil
                 message = ""
-                return true
             }
-            return succeeded && volume == 0
+            return succeeded || didMute || muted
         }
-        if !succeeded { message = "This output controls its own volume."; return false }
-        if muted && !setMuted(false) { return false }
-        refresh()
-        let verified = abs(volume - Double(value)) < 0.003
-        if verified { message = "" }
-        return verified
+        guard succeeded else { message = "This output controls its own volume."; return false }
+        message = ""
+        if muted { _ = setMuted(false) }
+        // An accepted write owns this keypress even if the device reports it later.
+        return true
     }
 
     @discardableResult func setMuted(_ value: Bool) -> Bool {
@@ -126,9 +129,8 @@ struct AudioOutput: Identifiable, Hashable {
         var address = audioAddress(kAudioDevicePropertyMute, scope: kAudioDevicePropertyScopeOutput)
         guard AudioObjectSetPropertyData(selectedDevice, &address, 0, nil, UInt32(MemoryLayout<UInt32>.size), &raw) == noErr else { message = "Mute is unavailable for this output."; return false }
         refresh()
-        let verified = muted == value
-        if verified { message = "" }
-        return verified
+        message = ""
+        return true
     }
 
     func selectOutput(_ id: AudioObjectID) {
@@ -204,6 +206,6 @@ struct AudioOutput: Identifiable, Hashable {
         let target = max(0.01, unit(value))
         guard set?(display == 0 ? CGMainDisplayID() : display, Float(target)) == 0 else { return false }
         refresh()
-        return abs(level - target) < 0.003
+        return true
     }
 }

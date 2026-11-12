@@ -2,6 +2,21 @@ import XCTest
 @testable import NotchCore
 
 final class NotchCoreTests: XCTestCase {
+    func testSeekScriptChecksTrackBeforeWritingPosition() throws {
+        let music = try XCTUnwrap(MediaSeekAction.script(bundleID: "com.apple.Music", trackID: "AABBCC1122334455", position: 34.5))
+        let guardRange = try XCTUnwrap(music.range(of: #"if (persistent ID of current track as text) is not "AABBCC1122334455""#))
+        let writeRange = try XCTUnwrap(music.range(of: "set player position to 34.5"))
+        XCTAssertLessThan(guardRange.lowerBound, writeRange.lowerBound)
+        XCTAssertTrue(music.contains("with timeout of 3 seconds"))
+
+        let spotify = try XCTUnwrap(MediaSeekAction.script(bundleID: "com.spotify.client", trackID: #"spotify:local:a"b\c"#, position: 0))
+        XCTAssertTrue(spotify.contains(#"(id of current track as text) is not "spotify:local:a\"b\\c""#))
+        XCTAssertNil(MediaSeekAction.script(bundleID: "com.apple.Music", trackID: "", position: 1))
+        XCTAssertNil(MediaSeekAction.script(bundleID: "com.apple.Music", trackID: "a\nb", position: 1))
+        XCTAssertNil(MediaSeekAction.script(bundleID: "other", trackID: "track", position: 1))
+        XCTAssertNil(MediaSeekAction.script(bundleID: "com.apple.Music", trackID: "track", position: .nan))
+    }
+
     func testNoticeQueueDeduplicatesAndUpdatesLateBattery() {
         var queue = NoticeQueue()
         XCTAssertTrue(queue.enqueue(.init(key: "pods", name: "AirPods", kind: .earbuds)))

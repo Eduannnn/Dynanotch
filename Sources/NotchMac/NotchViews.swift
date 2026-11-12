@@ -43,103 +43,71 @@ struct NotchRootView: View {
     @Environment(\.staticNotchPreview) private var staticPreview
     static let canvasWidth: CGFloat = 920
     static let canvasHeight: CGFloat = 640
+    fileprivate static let canvasSpace = "notch-canvas"
 
     var body: some View {
         let surface = staticPreview ? model.surfaceTarget : motion.surface
         let playing = model.media.snapshot?.isPlaying == true
         let expanded = model.presentation == .expanded
+        let waveformVisible = model.media.snapshot != nil && [.collapsed, .peek, .expanded].contains(model.presentation)
         let mediaVisible = model.media.snapshot != nil && ([.collapsed, .peek, .expanded].contains(model.presentation)
             || model.preservesMediaArtwork || model.showsMediaBubble)
+        let left = (Self.canvasWidth - surface.width) / 2 + surface.offset
+        let right = left + surface.width
+        let satelliteY = max(0, (model.collapsedHeight - NotchModel.volumePillHeight) / 2)
         ZStack(alignment: .topLeading) {
-            ZStack(alignment: .topLeading) {
-                if let charge = model.trailingCharge {
-                    Capsule().fill(Color.notchSurface)
-                        .overlay {
-                            ChargingBatteryGlyph(level: charge.battery)
-                                .id(charge.id)
-                                .offset(x: 1, y: 0.5)
-                        }
-                        .overlay {
-                            SpecularGlassRim(surface: Capsule(), edge: Capsule(),
-                                             highlight: model.chargePillLighting.point,
-                                             strength: model.chargePillLighting.strength, staticPreview: staticPreview)
-                        }
-                        .frame(width: NotchModel.chargePillWidth, height: NotchModel.volumePillHeight)
-                        .offset(x: (Self.canvasWidth + surface.width) / 2 + surface.offset + NotchModel.volumePillGap,
-                                y: (model.collapsedHeight - NotchModel.volumePillHeight) / 2)
-                        .accessibilityLabel("Charging")
-                        .accessibilityValue(charge.battery.map { "\(Int($0 * 100)) percent" } ?? "")
-                        .transition(reduceMotion ? .opacity : .offset(
-                            x: -(NotchModel.chargePillWidth + NotchModel.volumePillGap)
-                        ).combined(with: .opacity))
-                }
-            }
-            .frame(width: Self.canvasWidth, height: Self.canvasHeight, alignment: .topLeading)
-            .allowsHitTesting(false)
-            .animation(reduceMotion ? IslandMotion.fade : IslandMotion.shape, value: model.trailingCharge != nil)
-
-            ZStack(alignment: .topLeading) {
-                if let volume = model.trailingVolume {
-                    Capsule().fill(Color.notchSurface)
-                        .overlay {
-                            Capsule().fill(.white.opacity(0.2)).frame(width: 55, height: 6)
-                                .overlay(alignment: .leading) {
-                                    Capsule().fill(.white)
-                                        .frame(width: volume.muted ? 0 : 55 * unit(volume.level), height: 6)
-                                }
-                                .overlay {
-                                    if volume.muted {
-                                        Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
-                                            .foregroundStyle(.white)
-                                    }
-                                }
-                                .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: volume)
-                        }
-                        .overlay {
-                            SpecularGlassRim(surface: Capsule(), edge: Capsule(),
-                                             highlight: model.volumePillLighting.point,
-                                             strength: model.volumePillLighting.strength, staticPreview: staticPreview)
-                        }
-                        .frame(width: NotchModel.volumePillWidth, height: NotchModel.volumePillHeight)
-                        .offset(x: (Self.canvasWidth + surface.width) / 2 + surface.offset + NotchModel.volumePillGap + model.volumePillExtraOffset,
-                                y: (model.collapsedHeight - NotchModel.volumePillHeight) / 2)
-                        .allowsHitTesting(false)
-                        .accessibilityLabel("Volume")
-                        .accessibilityValue(volume.label)
-                        .transition(reduceMotion ? .opacity : .offset(
-                            x: -(NotchModel.volumePillWidth + NotchModel.volumePillGap)
-                        ).combined(with: .opacity))
-                }
-            }
-            .frame(width: Self.canvasWidth, height: Self.canvasHeight, alignment: .topLeading)
-            .animation(reduceMotion ? IslandMotion.fade : IslandMotion.shape, value: model.trailingVolume != nil)
-
-            ZStack(alignment: .top) {
-                NotchSilhouette(radius: surface.radius, ear: surface.ear)
-                    .fill(Color.notchSurface)
+            BubbleSatellite(model: model, kind: .charge, item: model.trailingCharge,
+                            lane: .init(edge: right, y: satelliteY, width: NotchModel.chargePillWidth, side: .trailing)) { charge in
+                Capsule().fill(Color.notchSurface)
                     .overlay {
-                        NotchGlassRim(radius: surface.radius, ear: surface.ear, highlight: model.edgeLighting.point,
-                                      strength: model.edgeLighting.strength, staticPreview: staticPreview)
+                        ChargingBatteryGlyph(level: charge.battery)
+                            .id(charge.id)
+                            .offset(x: 1, y: 0.5)
                     }
-                    .shadow(color: .black.opacity(expanded ? 0.32 : 0), radius: 15, x: 0, y: 6)
-                    .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: expanded)
-                ZStack(alignment: .top) {
-                    content
-                        .frame(width: model.bodyWidth, height: model.bodyHeight, alignment: .top)
-                        .id(model.presentation)
-                        .transition(IslandMotion.content)
-                }
-                .animation(IslandMotion.fade, value: model.presentation)
-                .frame(width: surface.width, height: surface.height, alignment: .top)
-                .padding(.horizontal, surface.ear)
-                .clipShape(NotchSilhouette(radius: surface.radius, ear: surface.ear))
-
+                    .overlay {
+                        SpecularGlassRim(surface: Capsule(), edge: Capsule(),
+                                         highlight: model.chargePillLighting.point,
+                                         strength: model.chargePillLighting.strength, staticPreview: staticPreview)
+                    }
+                    .frame(width: NotchModel.chargePillWidth, height: NotchModel.volumePillHeight)
+                    .accessibilityLabel("Charging")
+                    .accessibilityValue(charge.battery.map { "\(Int($0 * 100)) percent" } ?? "")
             }
-            .frame(width: surface.width + 2 * surface.ear, height: surface.height, alignment: .top)
-            .offset(x: (Self.canvasWidth - surface.width) / 2 + surface.offset - surface.ear)
+            .allowsHitTesting(false)
 
-            ZStack(alignment: .topLeading) {
-                if let notice = model.leadingAirPods, let artwork = notice.airPodsArtwork {
+            BubbleSatellite(model: model, kind: .volume, item: model.trailingVolume,
+                            lane: .init(edge: right, y: satelliteY, width: NotchModel.volumePillWidth,
+                                        side: .trailing, occupiedWidth: model.volumePillExtraOffset)) { volume in
+                Capsule().fill(Color.notchSurface)
+                    .overlay {
+                        Capsule().fill(.white.opacity(0.2)).frame(width: 55, height: 6)
+                            .overlay(alignment: .leading) {
+                                Capsule().fill(.white)
+                                    .frame(width: volume.muted ? 0 : 55 * unit(volume.level), height: 6)
+                            }
+                            .overlay {
+                                if volume.muted {
+                                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: volume)
+                    }
+                    .overlay {
+                        SpecularGlassRim(surface: Capsule(), edge: Capsule(),
+                                         highlight: model.volumePillLighting.point,
+                                         strength: model.volumePillLighting.strength, staticPreview: staticPreview)
+                    }
+                    .frame(width: NotchModel.volumePillWidth, height: NotchModel.volumePillHeight)
+                    .accessibilityLabel("Volume")
+                    .accessibilityValue(volume.label)
+            }
+            .allowsHitTesting(false)
+
+            BubbleSatellite(model: model, kind: .airPods, item: model.leadingAirPods,
+                            lane: .init(edge: left, y: satelliteY, width: NotchModel.airPodsPillSize,
+                                        side: .leading, occupiedWidth: model.airPodsPillOffset - 42)) { notice in
+                if let artwork = notice.airPodsArtwork {
                     AirPodsBatterySatellite(notice: notice, model: model, system: model.system) {
                         Circle().fill(Color.notchSurface)
                             .overlay {
@@ -166,17 +134,12 @@ struct NotchRootView: View {
                             .frame(width: NotchModel.airPodsPillSize, height: NotchModel.airPodsPillSize)
                     }
                     .id(notice.id)
-                    .frame(width: NotchModel.airPodsExpandedWidth, alignment: .trailing)
-                    .offset(x: (Self.canvasWidth - surface.width) / 2 + surface.offset - model.airPodsPillOffset
-                                + NotchModel.airPodsPillSize - NotchModel.airPodsExpandedWidth,
-                            y: max(0, (model.collapsedHeight - NotchModel.airPodsPillSize) / 2))
-                    .transition(.opacity.animation(IslandMotion.fade))
+                    .fixedSize(horizontal: true, vertical: false)
                 }
             }
-            .frame(width: Self.canvasWidth, height: Self.canvasHeight, alignment: .topLeading)
-            .animation(reduceMotion || staticPreview ? nil : IslandMotion.fade, value: model.leadingAirPods?.id)
 
-            if model.showsMediaBubble {
+            BubbleSatellite(model: model, kind: .music, item: model.showsMediaBubble ? true : nil,
+                            lane: .init(edge: left, y: satelliteY, width: 34, side: .leading)) { _ in
                 Button { model.activateBubble() } label: {
                     Circle().fill(Color.notchSurface)
                         .overlay {
@@ -187,9 +150,38 @@ struct NotchRootView: View {
                 }
                 .accessibilityLabel("Return to Now Playing")
                 .help("Return to Now Playing")
-                .offset(x: (Self.canvasWidth - surface.width) / 2 + surface.offset - 42, y: max(0, (model.collapsedHeight - 34) / 2))
-                .transition(.opacity.animation(IslandMotion.fade))
             }
+
+            ZStack(alignment: .top) {
+                NotchSilhouette(radius: surface.radius, ear: surface.ear)
+                    .fill(Color.notchSurface)
+                    .overlay {
+                        NotchGlassRim(radius: surface.radius, ear: surface.ear, highlight: model.edgeLighting.point,
+                                      strength: model.edgeLighting.strength, staticPreview: staticPreview)
+                    }
+                    .shadow(color: .black.opacity(expanded ? 0.32 : 0), radius: 15, x: 0, y: 6)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: expanded)
+                ZStack(alignment: .top) {
+                    content
+                        .frame(width: model.bodyWidth, height: model.bodyHeight, alignment: .top)
+                        .id(model.presentation)
+                        .transition(IslandMotion.content)
+                }
+                .animation(IslandMotion.fade, value: model.presentation)
+                .frame(width: surface.width, height: surface.height, alignment: .top)
+                .overlay(alignment: .topLeading) {
+                    WaveformView(model: model, waveform: model.waveform)
+                        .position(x: surface.width - surface.waveformInset, y: surface.waveformY)
+                        .opacity(waveformVisible ? 1 : 0)
+                        .animation(IslandMotion.fade, value: waveformVisible)
+                        .allowsHitTesting(false)
+                }
+                .padding(.horizontal, surface.ear)
+                .clipShape(NotchSilhouette(radius: surface.radius, ear: surface.ear))
+
+            }
+            .frame(width: surface.width + 2 * surface.ear, height: surface.height, alignment: .top)
+            .offset(x: (Self.canvasWidth - surface.width) / 2 + surface.offset - surface.ear)
 
             FlippingArtworkView(image: model.media.snapshot?.artwork, identity: model.media.snapshot?.identity,
                                 size: surface.artworkSize, radius: min(13, surface.artworkSize * 0.22),
@@ -216,6 +208,7 @@ struct NotchRootView: View {
             }
         }
         .frame(width: Self.canvasWidth, height: Self.canvasHeight, alignment: .topLeading)
+        .coordinateSpace(name: Self.canvasSpace)
         .foregroundStyle(.white)
         .font(.system(size: 13))
         .tint(model.accent)
@@ -248,7 +241,7 @@ struct NotchRootView: View {
             HStack(spacing: 0) {
                 Color.clear.frame(width: model.compactLeadingWidth)
                 Color.clear.frame(width: model.cameraWidth)
-                WaveformView(model: model, waveform: model.waveform).frame(width: model.compactTrailingWidth)
+                Color.clear.frame(width: model.compactTrailingWidth)
             }.frame(height: model.cameraHeight).contentShape(Rectangle())
                 .onTapGesture { model.toggleExpansion() }
                 .accessibilityLabel("Now Playing. Click to expand.")
@@ -261,7 +254,7 @@ struct NotchRootView: View {
                     Color.clear.frame(width: 40, height: 40)
                     metadata(compact: true)
                     Spacer(minLength: 4)
-                    WaveformView(model: model, waveform: model.waveform)
+                    Color.clear.frame(width: WaveformView.width)
                 }.padding(.horizontal, 14).padding(.top, 2)
             }.contentShape(Rectangle()).onTapGesture { model.toggleExpansion() }
         case .expanded:
@@ -272,7 +265,14 @@ struct NotchRootView: View {
             if let osd = model.osd {
                 HStack(spacing: 0) {
                     if model.preservesMediaArtwork { Color.clear.frame(width: model.osdLeadingWidth) }
-                    else { Image(systemName: osd.symbol).font(.system(size: 24, weight: .medium)).frame(width: model.osdLeadingWidth) }
+                    else {
+                        let animatesSpeaker = osd.kind == .volume && model.media.snapshot == nil && !reduceMotion
+                        Image(systemName: osd.symbol)
+                            .font(.system(size: 24, weight: .medium))
+                            .frame(width: model.osdLeadingWidth)
+                            .contentTransition(animatesSpeaker ? symbolReplaceTransition : .identity)
+                            .animation(animatesSpeaker ? .default.speed(1.25) : nil, value: osd.symbol)
+                    }
                     Color.clear.frame(width: model.cameraWidth)
                     NotchVolumeBar(osd: osd, showsMuteMark: model.preservesMediaArtwork)
                         .frame(width: model.osdTrailingWidth)
@@ -292,6 +292,160 @@ struct NotchRootView: View {
             MarqueeText(text: model.media.snapshot?.identity.title ?? "", font: .system(size: compact ? 14 : 15, weight: .semibold))
             Text(model.media.snapshot?.identity.artist ?? "").font(.system(size: 11.5)).foregroundStyle(Color.notchSecondary).lineLimit(1)
         }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct BubbleLane {
+    let edge: CGFloat
+    let y: CGFloat
+    let width: CGFloat
+    let side: HorizontalEdge
+    var occupiedWidth: CGFloat = 0
+
+    var direction: CGFloat { side == .leading ? -1 : 1 }
+    @MainActor var restGap: CGFloat { NotchModel.volumePillGap }
+}
+
+private struct BubbleSatellite<Item: Equatable, Content: View>: View {
+    let model: NotchModel
+    let kind: NotchSatellite
+    let item: Item?
+    let lane: BubbleLane
+    @ViewBuilder var content: (Item) -> Content
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.staticNotchPreview) private var staticPreview
+    @State private var retainedItem: Item?
+    @State private var reservedWidth: CGFloat = 0
+
+    var body: some View {
+        var displayedLane = lane
+        if !reduceMotion && !staticPreview {
+            displayedLane.occupiedWidth = max(lane.occupiedWidth, reservedWidth)
+        }
+        return BubbleFlight(progress: item == nil ? 0 : 1, lane: displayedLane, moves: !reduceMotion && !staticPreview) {
+            if let displayed = item ?? retainedItem {
+                content(displayed)
+                    .onGeometryChange(for: CGRect.self) { proxy in
+                        proxy.frame(in: .named(NotchRootView.canvasSpace))
+                    } action: { frame in
+                        if !staticPreview { model.presentSatellite(kind, frame: frame) }
+                    }
+                    .onDisappear {
+                        if !staticPreview { model.presentSatellite(kind, frame: nil) }
+                    }
+            }
+        }
+        .animation(staticPreview ? nil : reduceMotion ? IslandMotion.fade : IslandMotion.bubble, value: item != nil)
+        .animation(reduceMotion || staticPreview ? nil : .easeOut(duration: 0.16), value: displayedLane.occupiedWidth)
+        .allowsHitTesting(item != nil)
+        .accessibilityHidden(item == nil)
+        .onChange(of: item, initial: true) { _, current in
+            // Keep the outgoing content available for the spring, including on a rapid reversal.
+            if let current { retainedItem = current }
+        }
+        .task(id: lane.occupiedWidth) {
+            guard !reduceMotion && !staticPreview else { return }
+            if lane.occupiedWidth > 0 {
+                reservedWidth = lane.occupiedWidth
+            } else if reservedWidth > 0 {
+                // Leave room for the inner satellite while its removal spring is still running.
+                do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+                reservedWidth = 0
+            }
+        }
+    }
+}
+
+private struct BubbleFlight<Content: View>: View, Animatable {
+    var progress: CGFloat
+    var lane: BubbleLane
+    let moves: Bool
+    @ViewBuilder var content: () -> Content
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { .init(progress, lane.occupiedWidth) }
+        set {
+            progress = newValue.first
+            lane.occupiedWidth = newValue.second
+        }
+    }
+
+    var body: some View {
+        let phase = unit(progress)
+        let occupiedWidth = max(0, lane.occupiedWidth)
+        let openLane = 1 - unit(occupiedWidth / lane.restGap)
+        let travel = 4 + (lane.width + lane.restGap - 2) * openLane
+        // Give the exposed bridge more time than the travel hidden behind the island.
+        let remaining = (1 - phase) * (1 - phase) * (1 + 0.4 * phase)
+        let gap = lane.restGap + occupiedWidth - (moves ? travel * remaining : 0)
+        let left = lane.edge + lane.direction * gap - (lane.side == .leading ? lane.width : 0)
+        let height = NotchModel.volumePillHeight
+        let reveal = unit((gap + lane.width * 0.65) / (lane.width * 0.65))
+        let emergence = reveal * reveal * (3 - 2 * reveal)
+        let contentOpacity = moves ? emergence * openLane + phase * (1 - openLane) : phase
+
+        ZStack(alignment: .topLeading) {
+            if phase > 0 {
+                if moves && occupiedWidth < 0.5 && gap > -7 && gap < lane.restGap {
+                    let overlap: CGFloat = 8
+                    let span = gap + 2 * overlap
+                    LiquidBubbleBridge(gap: gap, restGap: lane.restGap, overlap: overlap)
+                        .fill(Color.notchSurface)
+                        .frame(width: span, height: height)
+                        .offset(x: lane.side == .leading ? lane.edge - gap - overlap : lane.edge - overlap,
+                                y: lane.y)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+
+                ZStack(alignment: .trailing) {
+                    if moves && occupiedWidth < 0.5 {
+                        Capsule().fill(Color.notchSurface)
+                    }
+                    content().opacity(contentOpacity)
+                }
+                .frame(width: lane.width, height: height, alignment: .trailing)
+                .offset(x: left, y: lane.y)
+            }
+        }
+        .frame(width: NotchRootView.canvasWidth, height: NotchRootView.canvasHeight, alignment: .topLeading)
+    }
+}
+
+private struct LiquidBubbleBridge: Shape {
+    let gap: CGFloat
+    let restGap: CGFloat
+    let overlap: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let center = rect.midY
+        let snapGap = restGap * 0.9
+        let stretch = unit(max(0, gap) / snapGap)
+        let neck = 8 * (1 - stretch * stretch * stretch)
+        let separation = unit((gap - snapGap) / (restGap - snapGap))
+        let tipReach = (rect.width / 2 - overlap + 2) * (1 - separation)
+        let shoulder: CGFloat = 11
+
+        // Both halves share a horizontal tangent at the neck. After pinching shut,
+        // their tips retract into the original silhouettes with no opacity seam.
+        var path = Path()
+        for direction: CGFloat in [1, -1] {
+            let start = direction > 0 ? rect.minX : rect.maxX
+            let tip = start + direction * (overlap - 2 + tipReach)
+            let distance = abs(tip - start)
+            let control = start + direction * distance * 0.62
+            path.move(to: CGPoint(x: start, y: center - shoulder))
+            path.addCurve(to: CGPoint(x: tip, y: center - neck),
+                          control1: CGPoint(x: control, y: center - shoulder),
+                          control2: CGPoint(x: tip - direction * distance * 0.28, y: center - neck))
+            path.addLine(to: CGPoint(x: tip, y: center + neck))
+            path.addCurve(to: CGPoint(x: start, y: center + shoulder),
+                          control1: CGPoint(x: tip - direction * distance * 0.28, y: center + neck),
+                          control2: CGPoint(x: control, y: center + shoulder))
+            path.closeSubpath()
+        }
+        return path
     }
 }
 
@@ -332,8 +486,7 @@ struct ExpandedPlayerView: View {
                     MarqueeText(text: media.snapshot?.identity.artist ?? "", font: .system(size: 22 * model.uiScale), color: .notchSecondary)
                 }.frame(maxWidth: .infinity, alignment: .leading)
                     .offset(y: -7)
-                WaveformView(model: model, waveform: model.waveform)
-                    .offset(y: -16)
+                Color.clear.frame(width: WaveformView.width)
             }.padding(.horizontal, 18).padding(.top, 8)
             if let item = media.snapshot, item.canControl { SeekBar(model: model, item: item).padding(.horizontal, 24).padding(.top, 2) }
             if media.snapshot?.canControl != false {
@@ -346,11 +499,8 @@ struct ExpandedPlayerView: View {
                 .overlay(alignment: .leading) {
                 if let item = media.snapshot, item.isAppleMusic {
                     Button { media.toggleFavorite() } label: {
-                        Image(systemName: item.isFavorited == true ? "star.fill" : "star")
-                            .font(.system(size: 24, weight: .regular))
-                            .foregroundStyle(item.isFavorited == true ? model.accent : Color.white.opacity(0.55))
-                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: model.accent)
-                            .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                        FavoriteStar(isFavorited: item.isFavorited == true, accent: model.accent)
+                            .id(item.identity.identifier)
                             .frame(width: 32, height: 44).contentShape(Rectangle())
                     }
                     .buttonStyle(PressScaleStyle())
@@ -384,6 +534,66 @@ struct ExpandedPlayerView: View {
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: model.preservesMediaArtwork)
+    }
+}
+
+private struct FavoriteStar: View {
+    let isFavorited: Bool
+    let accent: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private struct Motion {
+        var scale = 1.0
+        var glow = 0.0
+        var fadingFill = 0.0
+    }
+
+    private func star(filled: Bool) -> some View {
+        Image(systemName: filled ? "star.fill" : "star")
+            .font(.system(size: 24, weight: .regular))
+            .foregroundStyle(filled ? accent : Color.white.opacity(0.55))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: accent)
+    }
+
+    var body: some View {
+        if reduceMotion {
+            star(filled: isFavorited)
+        } else {
+            KeyframeAnimator(initialValue: Motion(), trigger: isFavorited) { motion in
+                let fill = unit(motion.fadingFill)
+                star(filled: isFavorited)
+                    .opacity(isFavorited ? 1 : 1 - fill)
+                    .overlay {
+                        if !isFavorited {
+                            star(filled: true).opacity(fill)
+                        }
+                    }
+                    .scaleEffect(motion.scale)
+                    .background {
+                        RadialGradient(colors: [.white.opacity(0.38), .clear],
+                                       center: .center, startRadius: 1, endRadius: 29)
+                            .frame(width: 58, height: 58)
+                            .opacity(unit(motion.glow))
+                            .allowsHitTesting(false)
+                    }
+            } keyframes: { _ in
+                KeyframeTrack(\.scale) {
+                    CubicKeyframe(isFavorited ? 1.30 : 0.92, duration: isFavorited ? 0.05 : 0.10)
+                    CubicKeyframe(isFavorited ? 1.44 : 0.94, duration: isFavorited ? 0.24 : 0.06)
+                    CubicKeyframe(isFavorited ? 0.90 : 1.00, duration: isFavorited ? 0.18 : 0.13)
+                    CubicKeyframe(1.00, duration: isFavorited ? 0.23 : 0.02)
+                }
+                KeyframeTrack(\.glow) {
+                    LinearKeyframe(isFavorited ? 0.55 : 0, duration: 0.04)
+                    CubicKeyframe(isFavorited ? 0.48 : 0, duration: isFavorited ? 0.25 : 0.10)
+                    CubicKeyframe(0, duration: isFavorited ? 0.36 : 0.13)
+                }
+                KeyframeTrack(\.fadingFill) {
+                    MoveKeyframe(isFavorited ? 0 : 1)
+                    CubicKeyframe(0, duration: 0.18)
+                }
+            }
+        }
     }
 }
 
@@ -467,6 +677,11 @@ private struct MusicAirPlayButton: View {
     }
 }
 
+private var symbolReplaceTransition: ContentTransition {
+    if #available(macOS 15.0, *) { return .symbolEffect(.replace.magic(fallback: .replace)) }
+    return .symbolEffect(.replace)
+}
+
 private struct ExpandedTransportButton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.staticNotchPreview) private var staticPreview
@@ -508,9 +723,7 @@ private struct ExpandedTransportButton: View {
         }.buttonStyle(PressScaleStyle()).accessibilityLabel(label).help(label)
     }
     private var symbolTransition: ContentTransition {
-        if reduceMotion { return .identity }
-        if #available(macOS 15.0, *) { return .symbolEffect(.replace.magic(fallback: .replace)) }
-        return .symbolEffect(.replace)
+        reduceMotion ? .identity : symbolReplaceTransition
     }
 }
 
@@ -519,6 +732,7 @@ struct SeekBar: View {
     @ObservedObject var model: NotchModel
     var item: MediaSnapshot
     @State private var previewRatio: Double = 0
+    @State private var scrubTrack: TrackIdentity?
     @State private var hover = false
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.5)) { _ in
@@ -540,17 +754,22 @@ struct SeekBar: View {
                     .frame(height: geometry.size.height)
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 0).onChanged { value in
-                        guard item.duration > 0 else { return }
-                        previewRatio = unit(value.location.x / geometry.size.width); model.scrubbing = true
+                        guard item.duration > 0, geometry.size.width > 0 else { return }
+                        if scrubTrack == nil { scrubTrack = item.identity }
+                        previewRatio = unit(value.location.x / geometry.size.width)
+                        model.scrubbing = true
                     }.onEnded { value in
-                        guard item.duration > 0 else { return }
-                        model.media.seek(unit(value.location.x / geometry.size.width)); model.finishScrubbing()
+                        if let track = scrubTrack, geometry.size.width > 0 {
+                            model.media.seek(unit(value.location.x / geometry.size.width), on: track)
+                        }
+                        scrubTrack = nil
+                        model.finishScrubbing()
                     })
                     .onHover { hover = $0 }
                     .accessibilityLabel("Playback position")
                     .accessibilityValue(clockText(position))
                     .accessibilityAdjustableAction { direction in
-                        if item.duration > 0 { model.media.seek(unit((position + (direction == .increment ? 5 : -5)) / item.duration)) }
+                        if item.duration > 0 { model.media.seek(unit((position + (direction == .increment ? 5 : -5)) / item.duration), on: item.identity) }
                     }
                 }.frame(height: 18)
                 Text(item.duration > 0 ? "−" + clockText(max(0, item.duration - position)) : "–:––").frame(width: 39, alignment: .trailing)
@@ -579,6 +798,8 @@ struct ArtworkView: View {
 }
 
 struct WaveformView: View {
+    static let width: CGFloat = 26
+
     @ObservedObject var model: NotchModel
     @ObservedObject var waveform: WaveformService
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -590,7 +811,7 @@ struct WaveformView: View {
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: model.accent)
                     .frame(width: 2.2, height: 3 + 22 * level)
             }
-        }.frame(width: 26, height: 26)
+        }.frame(width: Self.width, height: 26)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: model.media.snapshot?.isPlaying == true)
             .accessibilityHidden(true).help(waveform.active ? "Measured live system audio" : "Allow system audio in Settings for the live waveform")
     }
@@ -669,11 +890,6 @@ private struct AirPodsBatterySatellite<Compact: View>: View {
                                lighting: model.airPodsPillLighting, staticPreview: staticPreview,
                                compact: compact)
                 .animation(reduceMotion || staticPreview ? nil : IslandMotion.satellite, value: expanded)
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-                    guard !staticPreview else { return }
-                    model.airPodsSatelliteWidth = width
-                    model.onSurfaceChanged?()
-                }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(notice.name) battery details")
@@ -681,9 +897,6 @@ private struct AirPodsBatterySatellite<Compact: View>: View {
             ? components.map { "\($0.label): \($0.reading)" }.joined(separator: ", ")
             : notice.battery.map { "\(Int(($0 * 100).rounded())) percent" } ?? "Battery level unavailable")
         .accessibilityHint(expanded ? "Collapse battery details" : "Expand battery details")
-        .onDisappear {
-            model.airPodsSatelliteWidth = NotchModel.airPodsPillSize
-        }
     }
 
     private enum Part { case left, right, chargingCase }
@@ -742,8 +955,6 @@ private struct AirPodsBatteryMorph<Compact: View>: View, Animatable {
         let compactOpacity = 1 - unit(phase / 0.52)
         ZStack(alignment: .leading) {
             Capsule().fill(Color.notchSurface)
-            compact().frame(width: height, height: height)
-                .opacity(compactOpacity)
             HStack(spacing: 0) {
                 ForEach(components.indices, id: \.self) { index in
                     let component = components[index]
@@ -779,6 +990,11 @@ private struct AirPodsBatteryMorph<Compact: View>: View, Animatable {
             .fixedSize(horizontal: true, vertical: false)
         }
         .frame(width: width, height: height, alignment: .leading)
+        .overlay(alignment: .trailing) {
+            compact().frame(width: height, height: height)
+                .opacity(compactOpacity)
+                .allowsHitTesting(false)
+        }
         .clipShape(Capsule())
         .overlay {
             SpecularGlassRim(surface: Capsule(), edge: Capsule(), highlight: lighting.point,

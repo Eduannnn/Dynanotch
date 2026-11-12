@@ -2,6 +2,40 @@ import AppKit
 import Combine
 import NotchCore
 
+/// Run one AppleScript job at a time. Commands can pass reads that have not started.
+@MainActor enum AppleScriptExecutor {
+    private static let worker = DispatchQueue(label: "com.eduannnn.notch.applescript", qos: .userInitiated)
+    private static var commands: [@Sendable () -> Void] = []
+    private static var reads: [@Sendable () -> Void] = []
+    private static var running = false
+
+    static func submit(background: Bool = false, _ job: @escaping @Sendable () -> Void) {
+        if background { reads.append(job) } else { commands.append(job) }
+        startNext()
+    }
+
+    private static func startNext() {
+        guard !running, !commands.isEmpty || !reads.isEmpty else { return }
+        let job = commands.isEmpty ? reads.removeFirst() : commands.removeFirst()
+        running = true
+        worker.async {
+            job()
+            DispatchQueue.main.async {
+                running = false
+                startNext()
+            }
+        }
+    }
+
+    nonisolated static func execute(_ source: String) -> (NSAppleEventDescriptor?, Int?) {
+        autoreleasepool {
+            var error: NSDictionary?
+            let output = NSAppleScript(source: source)?.executeAndReturnError(&error)
+            return (output, (error?[NSAppleScript.errorNumber] as? NSNumber)?.intValue)
+        }
+    }
+}
+
 private final class ArtworkDownload: @unchecked Sendable {
     private let lock = NSLock()
     private var value: Data?
@@ -37,7 +71,6 @@ struct MediaSnapshot {
     @Published private(set) var deniedApps: Set<String> = []
     @Published private(set) var message = ""
     @Published private(set) var favoriteChanging = false
-    private let queue = DispatchQueue(label: "com.eduannnn.notch.media", qos: .utility)
     private var timer: Timer?
     private var polling = false
     private var refreshRequested = false
@@ -88,12 +121,12 @@ struct MediaSnapshot {
         polling = true
         refreshRequested = false
         let previous = snapshot
-        queue.async { [weak self] in
+        AppleScriptExecutor.submit(background: true) { [weak self] in
             var results: [MediaSnapshot] = []
             var denied = Set<String>()
             for (bundle, name) in candidates.sorted(by: { ($0.0 == previous?.bundleID ? 0 : 1) < ($1.0 == previous?.bundleID ? 0 : 1) }) {
                 let script = Self.readScript(bundle: bundle)
-                let (result, error) = Self.execute(script)
+                let (result, error) = AppleScriptExecutor.execute(script)
                 if error == -1743 { denied.insert(name); continue }
                 guard let result, result.numberOfItems >= 7 else { continue }
                 func text(_ i: Int) -> String { result.atIndex(i)?.stringValue ?? "" }
@@ -123,7 +156,7 @@ struct MediaSnapshot {
                 for name in denied { if let id = self.players.first(where: { $0.1 == name })?.0 { self.deniedApps.insert(id) } }
                 if !denied.isEmpty { self.message = "Allow \(denied.sorted().joined(separator: ", ")) in System Settings → Privacy & Security → Automation." }
                 // A read queued before Play/Pause still describes the old state.
-                // The command completion starts a fresh read on this serial queue.
+                // The command completion requests a fresh read.
                 if self.pendingPlaybackCommand == nil && !self.preview && !self.stopped {
                     // An artwork result can finish after this read began. Never
                     // replace that newer image with the read's empty placeholder.
@@ -149,10 +182,23 @@ struct MediaSnapshot {
         artworkTrack = item.identity; artworkRetryAfter = Date().addingTimeInterval(5)
         let request = UUID(); artworkRequest = request
         artworkQueue.cancelAllOperations()
-        artworkQueue.addOperation { [weak self] in
-            var image: NSImage?
-            if item.bundleID == "com.apple.Music" {
-                let (result, _) = Self.execute("""
+        let apply: @Sendable (NSImage?) -> Void = { [weak self] image in
+            guard let image else { return }
+            let palette = Self.palette(image)
+            DispatchQueue.main.async {
+                guard let self, !self.stopped, !self.preview, self.artworkRequest == request,
+                      var current = self.snapshot, current.bundleID == item.bundleID,
+                      current.identity.isSameTrack(as: item.identity) else { return }
+                current.artwork = image
+                current.tint = palette.0
+                current.secondaryTint = palette.1
+                self.snapshot = current
+            }
+        }
+        if item.bundleID == "com.apple.Music" {
+            AppleScriptExecutor.submit(background: true) { [weak self] in
+                guard self != nil else { return }
+                let (result, _) = AppleScriptExecutor.execute("""
                 with timeout of 3 seconds
                 tell application id "com.apple.Music"
                     try
@@ -162,27 +208,20 @@ struct MediaSnapshot {
                 end tell
                 end timeout
                 """)
-                if result?.atIndex(1)?.stringValue == item.identity.identifier,
-                   result?.atIndex(2)?.stringValue == item.identity.title,
-                   let data = result?.atIndex(3)?.data { image = NSImage(data: data) }
-            } else if item.bundleID == "com.spotify.client", let address = item.artworkURL,
-                      let url = URL(string: address), url.scheme == "https" {
+                guard result?.atIndex(1)?.stringValue == item.identity.identifier,
+                      result?.atIndex(2)?.stringValue == item.identity.title,
+                      let data = result?.atIndex(3)?.data else { return }
+                apply(NSImage(data: data))
+            }
+        } else if item.bundleID == "com.spotify.client", let address = item.artworkURL,
+                  let url = URL(string: address), url.scheme == "https" {
+            artworkQueue.addOperation {
                 var request = URLRequest(url: url); request.timeoutInterval = 2
                 let done = DispatchSemaphore(value: 0), box = ArtworkDownload()
                 let task = URLSession.shared.dataTask(with: request) { data, _, _ in box.data = data; done.signal() }
                 task.resume()
                 if done.wait(timeout: .now() + 2) == .timedOut { task.cancel() }
-                else if let data = box.data { image = NSImage(data: data) }
-            }
-            let palette = image.map(Self.palette)
-            DispatchQueue.main.async {
-                guard let self, !self.stopped, !self.preview, self.artworkRequest == request,
-                      self.snapshot?.bundleID == item.bundleID,
-                      self.snapshot?.identity.isSameTrack(as: item.identity) == true else { return }
-                if let image, let palette {
-                    self.snapshot?.artwork = image
-                    self.snapshot?.tint = palette.0; self.snapshot?.secondaryTint = palette.1
-                }
+                else if let data = box.data { apply(NSImage(data: data)) }
             }
         }
     }
@@ -225,8 +264,8 @@ struct MediaSnapshot {
 
     func airPlayOutputs() async -> [AirPlayOutput]? {
         await withCheckedContinuation { continuation in
-            queue.async {
-                let (result, _) = Self.execute("""
+            AppleScriptExecutor.submit(background: true) {
+                let (result, _) = AppleScriptExecutor.execute("""
                 with timeout of 3 seconds
                 tell application id "com.apple.Music"
                     set outputs to {}
@@ -268,8 +307,8 @@ struct MediaSnapshot {
               let current = item.isFavorited,
               let script = MusicFavoriteAction.script(trackID: item.identity.identifier, favorited: !current) else { return }
         favoriteChanging = true
-        queue.async { [weak self] in
-            let (result, error) = Self.execute(script)
+        AppleScriptExecutor.submit { [weak self] in
+            let (result, error) = AppleScriptExecutor.execute(script)
             let value = result?.stringValue
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -290,23 +329,31 @@ struct MediaSnapshot {
         }
     }
 
-    func seek(_ fraction: Double) {
-        guard var item = snapshot, item.canControl, let target = seekPosition(fraction: fraction, duration: item.duration) else { return }
+    func seek(_ fraction: Double, on track: TrackIdentity) {
+        guard var item = snapshot, item.canControl, item.identity.isSameTrack(as: track),
+              let target = seekPosition(fraction: fraction, duration: item.duration) else { return }
+        if !item.isPreview {
+            guard item.identity.identifier == track.identifier,
+                  let script = MediaSeekAction.script(bundleID: item.bundleID, trackID: track.identifier, position: target) else { return }
+            let request = UUID()
+            pendingPlaybackCommand = request
+            send(script, playbackRequest: request)
+        }
         item.position = target; item.receivedAt = Date(); snapshot = item
-        if item.isPreview { return }
-        send("tell application id \"\(item.bundleID)\" to set player position to \(target)")
     }
 
     private func send(_ script: String, playbackRequest: UUID? = nil) {
-        queue.async { [weak self] in
-            let (_, error) = Self.execute(script)
+        AppleScriptExecutor.submit { [weak self] in
+            let (_, error) = AppleScriptExecutor.execute(script)
             DispatchQueue.main.async {
                 guard let self else { return }
                 if let playbackRequest {
                     guard self.pendingPlaybackCommand == playbackRequest else { return }
                     self.pendingPlaybackCommand = nil
                 }
-                if error != nil {
+                if error == -128 {
+                    self.message = "The song changed before Dynanotch could seek."
+                } else if error != nil {
                     self.message = "The player could not complete that action. Check Automation access in System Settings."
                 }
                 self.poll()
@@ -363,14 +410,6 @@ struct MediaSnapshot {
         end tell
         end timeout
         """
-    }
-
-    nonisolated private static func execute(_ source: String) -> (NSAppleEventDescriptor?, Int?) {
-        autoreleasepool {
-            var error: NSDictionary?
-            let output = NSAppleScript(source: source)?.executeAndReturnError(&error)
-            return (output, (error?[NSAppleScript.errorNumber] as? NSNumber)?.intValue)
-        }
     }
 
     nonisolated static func palette(_ image: NSImage) -> (RGB, RGB) {

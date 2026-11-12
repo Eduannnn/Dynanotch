@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.3 (build 78)
+
+- AirPods, charging, and media satellites stretch out of the notch and merge back through a liquid bridge. Click targets and edge lighting follow their animated positions.
+- The waveform moves with the player when opening and closing quickly. AirPods artwork stays anchored as the battery details collapse.
+- Artwork flips have a glass sheen. Removing an Apple Music favorite uses a softer transition.
+- Volume and brightness keys avoid a second adjustment when device readback is delayed.
+- Seeking checks that the original track is still playing. Playback commands take priority over queued background AppleScript reads.
+- Bluetooth devices with duplicate fallback identifiers no longer crash the app.
+
 ## 1.0.3 (build 71)
 
 - The expanded player uses the same volume bar and position as the collapsed player.

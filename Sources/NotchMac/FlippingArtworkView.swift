@@ -28,9 +28,7 @@ struct FlippingArtworkView: View {
     var body: some View {
         ArtworkView(image: displayedImage, size: size, radius: radius)
             .overlay {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(LinearGradient(colors: [.white.opacity(0.32), .clear, .black.opacity(0.16)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .opacity(min(1, abs(angle)/90))
+                ArtworkFlipGlass(angle: angle, radius: radius)
             }
             .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), perspective: 0.65)
             .onChange(of: identity) { _, _ in receive() }
@@ -84,5 +82,49 @@ struct FlippingArtworkView: View {
             displayedImage = image; displayedIdentity = identity
             pendingImage = nil; pendingIdentity = nil; angle = 0
         }
+    }
+}
+
+private struct ArtworkFlipGlass: View, Animatable {
+    var angle: Double
+    let radius: CGFloat
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var animatableData: Double {
+        get { angle }
+        set { angle = newValue }
+    }
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        let strength = sin(unit(abs(angle) / 90) * .pi * 0.8)
+        let sweep = 0.5 + angle / 200
+        ZStack {
+            if #available(macOS 26.0, *), !reduceTransparency, strength > 0.01 {
+                Color.clear
+                    .glassEffect(.clear, in: shape)
+                    .opacity(0.32)
+            }
+            shape.fill(LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .white.opacity(0.16), location: 0.39),
+                    .init(color: .white.opacity(0.48), location: 0.50),
+                    .init(color: .white.opacity(0.10), location: 0.63),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: UnitPoint(x: sweep - 0.35, y: 0.15),
+                endPoint: UnitPoint(x: sweep + 0.35, y: 0.85)
+            ))
+            shape.strokeBorder(
+                LinearGradient(colors: [.white.opacity(0.66), .clear, .white.opacity(0.22)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing),
+                lineWidth: 0.75
+            )
+        }
+        .clipShape(shape)
+        .opacity(strength)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

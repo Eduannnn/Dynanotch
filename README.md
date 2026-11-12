@@ -1,6 +1,6 @@
 # Dynanotch
 
-**Version 1.0.3**
+**Version 1.1.3**
 
 A SwiftUI and AppKit app that turns the MacBook camera notch into an interactive spot for media, device battery information, and system controls. Dynanotch draws its own interface. It runs without patches to macOS or changes to SIP.
 

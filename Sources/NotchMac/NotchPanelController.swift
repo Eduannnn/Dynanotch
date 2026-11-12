@@ -133,40 +133,42 @@ final class NotchPanel: NSPanel {
         return NSRect(x: panel.frame.midX - surface.width / 2 + surface.offset,
                       y: panel.frame.maxY - surface.height, width: surface.width, height: surface.height)
     }
-    private var activityBubbleRect: NSRect {
-        NSRect(x: bodyRect.minX - 42,
-               y: panel.frame.maxY - max(0, (model.collapsedHeight - 34) / 2) - 34,
-               width: 34, height: 34)
-    }
-    private var airPodsSatelliteRect: NSRect {
-        let size = NotchModel.airPodsPillSize
-        let width = model.airPodsSatelliteWidth
-        return NSRect(x: bodyRect.minX - model.airPodsPillOffset + size - width,
-                      y: activityBubbleRect.minY, width: width, height: size)
+    private func satelliteRect(_ satellite: NotchSatellite) -> NSRect? {
+        guard let rect = model.presentedSatellites[satellite], !rect.isEmpty else { return nil }
+        return NSRect(x: panel.frame.minX + rect.minX, y: panel.frame.maxY - rect.maxY,
+                      width: rect.width, height: rect.height)
     }
 
-    private func isOverAirPodsSatellite(_ point: NSPoint) -> Bool {
-        guard !model.hidden, !model.screenLocked, model.leadingAirPods != nil else { return false }
-        let rect = airPodsSatelliteRect
+    private func isOverSatellite(_ satellite: NotchSatellite, point: NSPoint) -> Bool {
+        guard !model.hidden, !model.screenLocked, !isBodyInteractive(point),
+              let rect = satelliteRect(satellite) else { return false }
+        // During a merge the satellite is drawn beneath the camera and main island.
+        if hardwareObstruction?.contains(point) == true { return false }
         let radius = rect.height / 2
         let dx = max(0, abs(point.x - rect.midX) - (rect.width / 2 - radius))
         return hypot(dx, point.y - rect.midY) <= radius
     }
 
+    private func isOverAirPodsSatellite(_ point: NSPoint) -> Bool {
+        model.leadingAirPods != nil && isOverSatellite(.airPods, point: point)
+    }
+
     private func isInteractive(_ point: NSPoint) -> Bool {
         if model.hidden || model.screenLocked { return false }
-        if isOverAirPodsSatellite(point) { return true }
-        if model.showsMediaBubble,
-           hypot(point.x - activityBubbleRect.midX, point.y - activityBubbleRect.midY) <= 17 { return true }
-        return isBodyInteractive(point)
+        return isBodyInteractive(point) || isOverAirPodsSatellite(point)
+            || (model.showsMediaBubble && isOverSatellite(.music, point: point))
     }
+
+    private var hardwareObstruction: CGRect? {
+        guard let geometry, geometry.hasHardwareNotch else { return nil }
+        return CGRect(x: geometry.centerX - geometry.cameraWidth / 2,
+                      y: geometry.screen.frame.maxY - geometry.cameraHeight,
+                      width: geometry.cameraWidth, height: geometry.cameraHeight)
+    }
+
     private func isBodyInteractive(_ point: NSPoint) -> Bool {
         if model.hidden || model.screenLocked { return false }
-        guard let geometry else { return false }
-        let obstruction = CGRect(x: geometry.centerX - geometry.cameraWidth/2,
-                                 y: geometry.screen.frame.maxY-geometry.cameraHeight,
-                                 width: geometry.cameraWidth, height: geometry.cameraHeight)
-        if geometry.hasHardwareNotch && obstruction.contains(point) { return false }
+        guard geometry != nil, hardwareObstruction?.contains(point) != true else { return false }
         let surface = model.presentedSurface ?? model.surfaceTarget
         let local = CGPoint(x: point.x-bodyRect.minX+surface.ear, y: bodyRect.maxY-point.y)
         return NotchSilhouette(radius: surface.radius, ear: surface.ear)
@@ -183,21 +185,15 @@ final class NotchPanel: NSPanel {
         let point = NSEvent.mouseLocation
         let interactive = isInteractive(point)
         let body = bodyRect
-        let bubble = activityBubbleRect
         let lighting = model.hidden ? EdgeLighting() : EdgeLighting.response(to: point, around: body)
-        let bubbleLighting = model.hidden || !model.showsMediaBubble ? EdgeLighting()
-            : EdgeLighting.response(to: point, around: bubble, reach: 80)
-        let airPodsLighting = model.hidden || model.leadingAirPods == nil ? EdgeLighting()
-            : EdgeLighting.response(to: point, around: airPodsSatelliteRect, reach: 80)
-        let pillY = body.maxY - (model.collapsedHeight + NotchModel.volumePillHeight) / 2
-        let pillX = body.maxX + NotchModel.volumePillGap
-        let chargeRect = NSRect(x: pillX, y: pillY, width: NotchModel.chargePillWidth, height: NotchModel.volumePillHeight)
-        let chargeLighting = model.hidden || model.trailingCharge == nil ? EdgeLighting()
-            : EdgeLighting.response(to: point, around: chargeRect, reach: 80)
-        let pillRect = NSRect(x: pillX + model.volumePillExtraOffset, y: pillY,
-                              width: NotchModel.volumePillWidth, height: NotchModel.volumePillHeight)
-        let pillLighting = model.hidden || model.trailingVolume == nil ? EdgeLighting()
-            : EdgeLighting.response(to: point, around: pillRect, reach: 80)
+        func lightingForSatellite(_ satellite: NotchSatellite) -> EdgeLighting {
+            guard !model.hidden, let rect = satelliteRect(satellite) else { return EdgeLighting() }
+            return EdgeLighting.response(to: point, around: rect, reach: 80)
+        }
+        let bubbleLighting = lightingForSatellite(.music)
+        let airPodsLighting = lightingForSatellite(.airPods)
+        let chargeLighting = lightingForSatellite(.charge)
+        let pillLighting = lightingForSatellite(.volume)
         func changed(_ old: EdgeLighting, _ new: EdgeLighting) -> Bool {
             abs(old.point.x - new.point.x) > 0.005 || abs(old.point.y - new.point.y) > 0.005
                 || abs(old.strength - new.strength) > 0.01

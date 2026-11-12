@@ -69,15 +69,23 @@ struct SystemSnapshot: Equatable {
             var result = SystemSnapshot()
             result.bluetoothOn = IOBluetoothHostController.default()?.powerState == kBluetoothHCIPowerStateON
             let devices = IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] ?? []
-            result.devices = devices.map { device in
+            let discovered = devices.map { device in
                 let name = device.name ?? "Bluetooth device"
                 let artwork = BluetoothArtworkMetadata.artwork(for: device)
                 let kind: NoticeKind = artwork.map { $0.family == .airpodsMax ? .headphones : .earbuds } ?? .device(named: name)
                 let connected = device.isConnected()
-                return BluetoothItem(id: device.addressString ?? name, name: name, connected: connected, kind: kind,
+                let address = device.addressString.flatMap { $0.isEmpty ? nil : $0 }
+                return BluetoothItem(id: address ?? "name/" + name, name: name, connected: connected, kind: kind,
                                      airPodsArtwork: artwork, airPodsBattery: connected && artwork != nil
                                          ? BluetoothArtworkMetadata.battery(for: device) : nil)
-            }.sorted { $0.connected != $1.connected ? $0.connected : $0.name < $1.name }
+            }
+            let unique = Dictionary(discovered.map { ($0.id, $0) }, uniquingKeysWith: { first, second in
+                second.connected && !first.connected ? second : first
+            })
+            result.devices = unique.values.sorted { lhs, rhs in
+                if lhs.connected != rhs.connected { return lhs.connected }
+                return lhs.name != rhs.name ? lhs.name < rhs.name : lhs.id < rhs.id
+            }
             let usb = Self.readUSB()
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -133,7 +141,7 @@ struct SystemSnapshot: Equatable {
 
     private func accept(_ next: SystemSnapshot, usb: [String: String]) {
         if initialized {
-            let previous = Dictionary(uniqueKeysWithValues: state.devices.map { ($0.id, $0.connected) })
+            let previous = Dictionary(state.devices.map { ($0.id, $0.connected) }, uniquingKeysWith: { $0 || $1 })
             for device in next.devices where device.connected != (previous[device.id] ?? false) {
                 onNotice?(.init(key: device.id, name: device.name, kind: device.kind, connected: device.connected, battery: device.airPodsBattery?.listeningLevel, airPodsArtwork: device.airPodsArtwork))
             }
@@ -260,9 +268,8 @@ struct SystemSnapshot: Equatable {
             NSApp.activate(ignoringOtherApps: true)
             guard alert.runModal() == .alertSecondButtonReturn else { return }
         }
-        DispatchQueue.global(qos: .userInitiated).async {
-            var error: NSDictionary?
-            NSAppleScript(source: "tell application \"System Events\" to \(action)")?.executeAndReturnError(&error)
+        AppleScriptExecutor.submit {
+            let (_, error) = AppleScriptExecutor.execute("with timeout of 5 seconds\ntell application \"System Events\" to \(action)\nend timeout")
             if error != nil {
                 DispatchQueue.main.async {
                     let alert = NSAlert(); alert.messageText = "macOS could not complete the power action."

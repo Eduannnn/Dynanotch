@@ -10,6 +10,9 @@ enum IslandMotion {
     static var satellite: Animation {
         reduced ? .easeOut(duration: 0.1) : .spring(response: 0.46, dampingFraction: 0.90)
     }
+    static var bubble: Animation {
+        .spring(response: 0.57, dampingFraction: 0.94)
+    }
     static var height: Animation {
         shape
     }

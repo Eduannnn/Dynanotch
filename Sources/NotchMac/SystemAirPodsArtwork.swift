@@ -62,25 +62,21 @@ struct SystemAirPodsGlyph: View {
     @State private var poster: NSImage?
     @State private var playing = false
     @State private var failed = false
-    @State private var finished = false
 
     var body: some View {
         ZStack {
-            if !playing || !playMovie || reduceMotion || !connected || failed || finished {
+            if !playing || !playMovie || reduceMotion || !connected || failed {
                 if let image = poster ?? SystemAirPodsArtwork.cachedPoster(for: artwork) {
                     Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
                 } else {
                     Image(systemName: fallback).font(.system(size: 26, weight: .medium))
                 }
             }
-            if playMovie, !reduceMotion, connected, !failed, !finished, let url = SystemAirPodsArtwork.url(for: artwork) {
+            if playMovie, !reduceMotion, connected, !failed, let url = SystemAirPodsArtwork.url(for: artwork) {
                 PairingMovie(url: url, onReady: { duration in
                     playing = true
                     onPlaybackReady(duration)
-                }, onEnd: {
-                    finished = true
-                    onPlaybackEnd()
-                }, onFailure: {
+                }, onEnd: onPlaybackEnd, onFailure: {
                     failed = true; playing = false
                     onPlaybackFailure()
                 })
@@ -90,7 +86,7 @@ struct SystemAirPodsGlyph: View {
         .frame(width: size, height: size).opacity(connected ? 1 : 0.4)
         .allowsHitTesting(false).accessibilityHidden(true)
         .task(id: artwork) { poster = await SystemAirPodsArtwork.poster(for: artwork) }
-        .onChange(of: artwork) { _, _ in playing = false; failed = false; finished = false }
+        .onChange(of: artwork) { _, _ in playing = false; failed = false }
         .onChange(of: reduceMotion) { _, _ in playing = false }
     }
 }

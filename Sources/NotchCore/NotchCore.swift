@@ -26,6 +26,29 @@ public func seekPosition(fraction: Double, duration: Double) -> Double? {
     return min(max(0, duration - 0.01), unit(fraction) * duration)
 }
 
+public enum MediaSeekAction {
+    public static func script(bundleID: String, trackID: String, position: Double) -> String? {
+        guard !trackID.isEmpty, position.isFinite, position >= 0,
+              !trackID.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else { return nil }
+        let identifier: String
+        switch bundleID {
+        case "com.apple.Music": identifier = "persistent ID"
+        case "com.spotify.client": identifier = "id"
+        default: return nil
+        }
+        let literal = trackID.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return """
+        with timeout of 3 seconds
+        tell application id "\(bundleID)"
+            if (\(identifier) of current track as text) is not "\(literal)" then error "The playing track changed." number -128
+            set player position to \(position)
+        end tell
+        end timeout
+        """
+    }
+}
+
 public func clockText(_ seconds: Double) -> String {
     let value = seconds.isFinite ? Int(max(0, min(seconds, 864_000))) : 0
     return "\(value / 60):\(String(format: "%02d", value % 60))"

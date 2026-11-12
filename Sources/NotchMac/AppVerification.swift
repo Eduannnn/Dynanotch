@@ -215,11 +215,15 @@ import NotchCore
             .frame(width: 800, height: 80, alignment: .top).clipped())
         window.orderFrontRegardless()
         var sawIntermediateWidth = false
+        var compactSatelliteFrame: CGRect?
         var reopened = false
         var collapsedAgain = false
         var disconnected = false
         let reducingMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) { morphModel.toggleAirPodsDetails(testNotice.id) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
+            compactSatelliteFrame = morphModel.presentedSatellites[.airPods]
+            morphModel.toggleAirPodsDetails(testNotice.id)
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.29) {
             let width = morphModel.airPodsSatelliteWidth
             sawIntermediateWidth = reducingMotion || (width > NotchModel.airPodsPillSize && width < NotchModel.airPodsExpandedWidth)
@@ -227,8 +231,14 @@ import NotchCore
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.37) { morphModel.toggleAirPodsDetails(testNotice.id) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.10) {
-            reopened = abs(morphModel.airPodsSatelliteWidth - NotchModel.airPodsExpandedWidth) < 1
-                && morphModel.surfaceTarget == centerBeforeMorph && morphModel.trailingCharge != nil
+            if let frame = morphModel.presentedSatellites[.airPods] {
+                let expectedRight = (NotchRootView.canvasWidth - centerBeforeMorph.width) / 2
+                    + centerBeforeMorph.offset - NotchModel.volumePillGap
+                reopened = abs(frame.width - NotchModel.airPodsExpandedWidth) < 1
+                    && abs(frame.maxX - expectedRight) < 1
+                    && (compactSatelliteFrame?.minX ?? 0) > frame.minX
+                    && morphModel.surfaceTarget == centerBeforeMorph && morphModel.trailingCharge != nil
+            }
             render(morphModel, output.appendingPathComponent("airpods-horizontal-levels.png"), width: 800)
             morphModel.toggleAirPodsDetails(testNotice.id)
         }

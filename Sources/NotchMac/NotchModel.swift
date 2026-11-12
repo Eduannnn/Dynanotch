@@ -3,6 +3,10 @@ import SwiftUI
 import Combine
 import NotchCore
 
+enum NotchSatellite: Hashable {
+    case music, airPods, charge, volume
+}
+
 struct SystemOSD: Equatable {
     enum Kind { case volume, brightness }
     var kind: Kind
@@ -46,6 +50,7 @@ struct SystemOSD: Equatable {
     var restartApp: (() -> Void)?
     var displayScreen: NSScreen?
     var presentedSurface: NotchSurface?
+    private(set) var presentedSatellites: [NotchSatellite: CGRect] = [:]
     var onSurfaceChanged: (() -> Void)?
     @Published var edgeLighting = EdgeLighting()
     @Published var bubbleLighting = EdgeLighting()
@@ -97,7 +102,7 @@ struct SystemOSD: Equatable {
     }
     static let airPodsPillSize: CGFloat = 34
     static let airPodsExpandedWidth: CGFloat = 204
-    var airPodsSatelliteWidth: CGFloat = airPodsPillSize
+    var airPodsSatelliteWidth: CGFloat { presentedSatellites[.airPods]?.width ?? Self.airPodsPillSize }
     var airPodsPillOffset: CGFloat { !showsMediaBubble ? 42 : 84 }
     @Published var airPodsPillLighting = EdgeLighting()
 
@@ -197,14 +202,26 @@ struct SystemOSD: Equatable {
                          radius: presentation == .expanded ? 30 : radius,
                          ear: earRadius, artworkX: -25, artworkY: collapsedHeight / 2, artworkSize: 20)
         }
+        let waveformInset: CGFloat = switch presentation {
+        case .expanded: 18 + WaveformView.width / 2
+        case .peek: 14 + WaveformView.width / 2
+        default: compactTrailingWidth / 2
+        }
         let size: CGFloat = presentation == .expanded ? 56 : presentation == .peek ? 40 : min(28, cameraHeight - 4)
         let x: CGFloat = presentation == .expanded ? 46 : presentation == .peek ? 34 : compactLeadingWidth / 2
         let y: CGFloat = presentation == .expanded ? cameraHeight + 20 : presentation == .peek ? cameraHeight + 22 : collapsedHeight / 2
         return .init(width: bodyWidth, height: bodyHeight, offset: bodyOffset,
                      radius: presentation == .expanded ? 30 : radius,
-                     ear: earRadius, artworkX: x, artworkY: y, artworkSize: size)
+                     ear: earRadius, artworkX: x, artworkY: y, artworkSize: size,
+                     waveformInset: waveformInset, waveformY: presentation == .collapsed ? cameraHeight / 2 : y)
     }
     func present(_ surface: NotchSurface) { presentedSurface = surface; onSurfaceChanged?() }
+    func presentSatellite(_ satellite: NotchSatellite, frame: CGRect?) {
+        guard presentedSatellites[satellite] != frame else { return }
+        presentedSatellites[satellite] = frame
+        onSurfaceChanged?()
+    }
+
     var accent: Color {
         guard preferences.artworkTint, let item = media.snapshot else { return .notchAccent }
         return Color(red: item.tint.r, green: item.tint.g, blue: item.tint.b)
