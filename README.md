@@ -8,9 +8,9 @@ A SwiftUI and AppKit app that turns the MacBook camera notch into an interactive
 
 ## See it in action
 
-The demo shows the notch expanding and collapsing, the cover flipping at about 0:02, play and pause transitions, and the AirPods bubble opening to show battery details. [Watch the 60 fps MP4](docs/images/dynanotch-motion.mp4).
+The demo shows the notch opening, the cover flipping around 0:02, and the AirPods and charging bubbles stretching out from the notch around 0:05. It also shows the AirPods battery pill opening and merging back into the notch. [Watch the MP4](docs/images/dynanotch-motion.mp4).
 
-![Animated preview of Dynanotch expanding, changing tracks, and opening the AirPods battery pill](docs/images/dynanotch-motion.gif)
+![Animated preview of the player, cover flip, and liquid AirPods and charging bubbles](docs/images/dynanotch-motion.gif)
 
 **AirPods connected while music is playing.** The connection bubble appears on the left, music stays in the center, and the MacBook’s charging pill sits on the right.
 
@@ -20,11 +20,11 @@ The demo shows the notch expanding and collapsing, the cover flipping at about 0
 
 ![Expanded AirPods battery pill showing three separate battery readings beside the compact player and charging pill](docs/images/airpods-battery-details.png)
 
-These screenshots are rendered by Dynanotch using sample media and battery readings.
+The demo and screenshots use sample media, waveform levels, and battery readings.
 
 **Where the physical notch sits.** The dashed outline marks the camera cutout on a notched MacBook. Artwork and the waveform stay on either side, with AirPods and charging in separate bubbles farther out.
 
-![Layout diagram showing the physical camera notch between the artwork and waveform, flanked by the AirPods and charging bubbles](docs/images/physical-notch-layout.svg)
+![Layout diagram showing the physical camera notch between the artwork and waveform, flanked by the AirPods and charging bubbles](docs/images/physical-notch-layout.png)
 
 **Expanded player.** The dashed overlay shows the same physical cutout above the title. The player grows down from the screen edge, with playback controls below the cutout.
 
