@@ -8,8 +8,6 @@ A SwiftUI and AppKit app that turns the MacBook camera notch into an interactive
 
 ## See it in action
 
-The demo shows the notch opening, the cover flipping around 0:02, and the AirPods and charging bubbles stretching out from the notch around 0:05. It also shows the AirPods battery pill opening and merging back into the notch. [Watch the MP4](docs/images/dynanotch-motion.mp4).
-
 ![Animated preview of the player, cover flip, and liquid AirPods and charging bubbles](docs/images/dynanotch-motion.gif)
 
 **AirPods connected while music is playing.** The connection bubble appears on the left, music stays in the center, and the MacBook’s charging pill sits on the right.
