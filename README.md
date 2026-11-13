@@ -1,8 +1,10 @@
 # Dynanotch
 
-**Version 1.1.4**
+**Version 1.1.4 · Tested on macOS 27.3 beta**
 
 A SwiftUI and AppKit app that turns the MacBook camera notch into an interactive spot for media, device battery information, and system controls. Dynanotch draws its own interface. It runs without patches to macOS or changes to SIP.
+
+Dynanotch brings a bit of the newer MacBooks’ Dynamic Island to your notch. On macOS 27.3 beta, it loads Apple’s AirPods connection animations and native playback skip animations directly from the system resources installed on your Mac.
 
 ![Expanded Apple Music player showing artwork, progress, Favorite, Previous, Pause, Next, and AirPlay](docs/images/player.jpg)
 
