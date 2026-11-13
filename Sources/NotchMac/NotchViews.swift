@@ -163,7 +163,7 @@ struct NotchRootView: View {
                     .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: expanded)
                 ZStack(alignment: .top) {
                     content
-                        .frame(width: model.bodyWidth, height: model.bodyHeight, alignment: .top)
+                        .frame(width: model.bodyWidth, height: model.contentHeight, alignment: .top)
                         .id(model.presentation)
                         .transition(IslandMotion.content)
                 }
@@ -486,9 +486,9 @@ struct ExpandedPlayerView: View {
                     MarqueeText(text: media.snapshot?.identity.artist ?? "", font: .system(size: 22 * model.uiScale), color: .notchSecondary)
                 }.frame(maxWidth: .infinity, alignment: .leading)
                     .offset(y: -7)
-                Color.clear.frame(width: WaveformView.width)
+                Color.clear.frame(width: model.expandedWaveformInset + WaveformView.width / 2 - 18)
             }.padding(.horizontal, 18).padding(.top, 8)
-            if let item = media.snapshot, item.canControl { SeekBar(model: model, item: item).padding(.horizontal, 24).padding(.top, 2) }
+            if let item = media.snapshot, item.canControl { SeekBar(model: model, item: item).padding(.horizontal, SeekBar.horizontalInset).padding(.top, 2) }
             if media.snapshot?.canControl != false {
                 HStack(spacing: 7) {
                     ExpandedTransportButton("backward.fill", label: "Previous track", glyphWidth: 36, glyphHeight: 23) { media.command("previous track") }
@@ -728,6 +728,9 @@ private struct ExpandedTransportButton: View {
 }
 
 struct SeekBar: View {
+    static let horizontalInset: CGFloat = 24
+    static let remainingTimeWidth: CGFloat = 39
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var model: NotchModel
     var item: MediaSnapshot
@@ -772,7 +775,7 @@ struct SeekBar: View {
                         if item.duration > 0 { model.media.seek(unit((position + (direction == .increment ? 5 : -5)) / item.duration), on: item.identity) }
                     }
                 }.frame(height: 18)
-                Text(item.duration > 0 ? "−" + clockText(max(0, item.duration - position)) : "–:––").frame(width: 39, alignment: .trailing)
+                Text(item.duration > 0 ? "−" + clockText(max(0, item.duration - position)) : "–:––").frame(width: Self.remainingTimeWidth, alignment: .trailing)
             }.font(.system(size: 22 * model.uiScale, weight: .medium)).monospacedDigit().foregroundStyle(Color.notchSecondary)
         }.onDisappear { if model.scrubbing { model.finishScrubbing() } }
     }
@@ -1102,7 +1105,7 @@ struct PressScaleStyle: ButtonStyle {
     }
 }
 
-/// Overflow scrolls with soft edges; the fades dissolve during each reading pause.
+/// Fade the edges where the scrolling title extends past its viewport.
 struct MarqueeText: View {
     var text: String
     var font: Font
@@ -1117,29 +1120,38 @@ struct MarqueeText: View {
             TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !canScroll)) { context in
                 let frame = RibbonFrame.at(elapsed: context.date.timeIntervalSince(start),
                                            textWidth: Double(textWidth), viewportWidth: Double(geometry.size.width))
-                let moving = canScroll && frame.fadedEdges
-                HStack(spacing: 36) {
-                    Text(text).font(font).foregroundStyle(color).fixedSize().background {
-                        GeometryReader { size in
-                            Color.clear.onAppear { textWidth = size.size.width }
-                                .onChange(of: size.size.width) { _, width in textWidth = width; start = Date() }
+                let offset = canScroll ? CGFloat(frame.offset) : 0
+                let fadeLeading = canScroll && (frame.fadedEdges || offset < -0.5)
+                let fadeTrailing = canScroll && (frame.fadedEdges || offset > -overflow + 0.5)
+                if reduceMotion {
+                    Text(text).font(font).foregroundStyle(color)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    HStack(spacing: 36) {
+                        Text(text).font(font).foregroundStyle(color).fixedSize().background {
+                            GeometryReader { size in
+                                Color.clear.onAppear { textWidth = size.size.width }
+                                    .onChange(of: size.size.width) { _, width in textWidth = width; start = Date() }
+                            }
                         }
+                        if canScroll { Text(text).font(font).foregroundStyle(color).fixedSize().accessibilityHidden(true) }
                     }
-                    if canScroll { Text(text).font(font).foregroundStyle(color).fixedSize().accessibilityHidden(true) }
-                }
-                .fixedSize(horizontal: true, vertical: false)
-                .offset(x: canScroll ? CGFloat(frame.offset) : 0)
-                .frame(width: geometry.size.width, alignment: .leading)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .offset(x: offset)
+                    .frame(width: geometry.size.width, alignment: .leading)
                     .mask {
                         HStack(spacing: 0) {
-                            LinearGradient(colors: [.white.opacity(moving ? 0 : 1), .white], startPoint: .leading, endPoint: .trailing)
+                            LinearGradient(colors: [.white.opacity(fadeLeading ? 0 : 1), .white], startPoint: .leading, endPoint: .trailing)
                                 .frame(width: min(12, geometry.size.width / 4))
                             Color.white
-                            LinearGradient(colors: [.white, .white.opacity(moving ? 0 : 1)], startPoint: .leading, endPoint: .trailing)
+                            LinearGradient(colors: [.white, .white.opacity(fadeTrailing ? 0 : 1)], startPoint: .leading, endPoint: .trailing)
                                 .frame(width: min(12, geometry.size.width / 4))
                         }
-                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: moving)
+                        .animation(.easeInOut(duration: 0.22), value: fadeLeading)
+                        .animation(.easeInOut(duration: 0.22), value: fadeTrailing)
                     }
+                }
             }
             .onChange(of: geometry.size.width) { _, _ in start = Date() }
         }.frame(height: 19).clipped().accessibilityLabel(text).onChange(of: text) { _, _ in start = Date() }

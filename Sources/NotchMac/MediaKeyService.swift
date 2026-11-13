@@ -15,6 +15,7 @@ import NotchCore
     private var capturedSettingsKey: Int64?
     private var requested = true
     private var started = false
+    private var suspended = false
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var timer: Timer?
@@ -34,6 +35,12 @@ import NotchCore
         guard started else { return }
         refresh()
     }
+    func suspendForLockScreen(_ suspended: Bool) {
+        guard self.suspended != suspended else { return }
+        self.suspended = suspended
+        if started { refresh() }
+    }
+
     func start() {
         guard !started else { return }
         started = true; refresh()
@@ -55,7 +62,7 @@ import NotchCore
     }
 
     private func refresh() {
-        guard requested || settingsShortcut != nil else { tearDownTap(); setStatus(.off); return }
+        guard !suspended, requested || settingsShortcut != nil else { tearDownTap(); setStatus(.off); return }
         guard AXIsProcessTrusted() else { tearDownTap(); setStatus(requested ? .needsAccessibility : .off); return }
         if let tap {
             if !CGEvent.tapIsEnabled(tap: tap) { CGEvent.tapEnable(tap: tap, enable: true) }

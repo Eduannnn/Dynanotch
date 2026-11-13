@@ -21,6 +21,8 @@ final class NotchPanel: NSPanel {
     private var outsideMonitor: Any?
     private var keyMonitor: Any?
     private var lockObservers: [NSObjectProtocol] = []
+    private var workspaceObservers: [NSObjectProtocol] = []
+    private var unlockWatchdog: Timer?
     private var geometry: DisplayGeometry?
 
     init(model: NotchModel) {
@@ -53,7 +55,12 @@ final class NotchPanel: NSPanel {
             guard let self else { return }
             self.applyWindowState(hidden: hidden)
         }.store(in: &subscriptions)
-        screenObserver = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.updateDisplay() } }
+        screenObserver = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.updateDisplay()
+                self?.applyWindowState()
+            }
+        }
         outsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             guard let self, !self.model.screenLocked else { return }
             let point = NSEvent.mouseLocation
@@ -87,37 +94,78 @@ final class NotchPanel: NSPanel {
                 MainActor.assumeIsolated { self?.setScreenLocked(locked) }
             })
         }
-        let session = CGSessionCopyCurrentDictionary() as? [String: Any]
-        setScreenLocked(session?["CGSSessionScreenIsLocked"] as? Bool ?? false)
+        let workspace = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.screensDidWakeNotification, NSWorkspace.sessionDidBecomeActiveNotification] {
+            workspaceObservers.append(workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let locked = Self.sessionIsLocked else { return }
+                    self.setScreenLocked(locked)
+                }
+            })
+        }
+        setScreenLocked(Self.sessionIsLocked ?? false)
+    }
+
+    private static var sessionIsLocked: Bool? {
+        guard let session = CGSessionCopyCurrentDictionary() as? [String: Any] else { return nil }
+        return session["CGSSessionScreenIsLocked"] as? Bool ?? false
     }
 
     private func setScreenLocked(_ locked: Bool) {
-        if locked && !model.screenLocked { model.lockEventCount += 1 }
-        model.screenLocked = locked
-        if locked {
-            model.closeAirPodsDetails()
-            model.edgeLighting = EdgeLighting(); model.bubbleLighting = EdgeLighting()
-            panel.resignKey()
+        if locked != model.screenLocked {
+            if locked {
+                model.lockEventCount += 1
+                panel.ignoresMouseEvents = true
+                panel.acceptsKeyboard = false
+                panel.resignKey()
+                model.closeAirPodsDetails()
+                model.edgeLighting = EdgeLighting()
+                model.bubbleLighting = EdgeLighting()
+            }
+            model.screenLocked = locked
+            model.mediaKeys.suspendForLockScreen(locked)
+        }
+        if locked && unlockWatchdog == nil {
+            // Recover if the distributed unlock notification is dropped.
+            let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    if Self.sessionIsLocked == false { self?.setScreenLocked(false) }
+                }
+            }
+            timer.tolerance = 0.25
+            RunLoop.main.add(timer, forMode: .common)
+            unlockWatchdog = timer
+        } else if !locked {
+            unlockWatchdog?.invalidate()
+            unlockWatchdog = nil
         }
         applyWindowState()
+        if !locked { trackPointer() }
     }
+
     private func applyWindowState(hidden: Bool? = nil) {
-        panel.canBecomeVisibleWithoutLogin = model.preferences.showOnLockScreen
-        panel.level = model.screenLocked && model.preferences.showOnLockScreen
-            ? NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
+        let locked = model.screenLocked
+        let showOnLockScreen = model.preferences.showOnLockScreen
+        let shouldShow = !(hidden ?? model.hidden) && (!locked || showOnLockScreen)
+        panel.canBecomeVisibleWithoutLogin = showOnLockScreen
+        panel.acceptsKeyboard = !locked
+        if locked { panel.ignoresMouseEvents = true }
+        if !shouldShow { panel.orderOut(nil) }
+        panel.level = locked && shouldShow
+            ? NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
             : NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 3)
-        panel.acceptsKeyboard = !model.screenLocked
         model.configuredVisibleWithoutLogin = panel.canBecomeVisibleWithoutLogin
         model.configuredWindowLevel = panel.level.rawValue
-        if model.screenLocked { model.lastLockedWindowLevel = panel.level.rawValue }
-        if model.screenLocked { panel.ignoresMouseEvents = true }
-        if (hidden ?? model.hidden) || (model.screenLocked && !model.preferences.showOnLockScreen) {
-            panel.orderOut(nil)
-        } else { panel.orderFrontRegardless() }
+        if locked { model.lastLockedWindowLevel = panel.level.rawValue }
+        if shouldShow, geometry != nil { panel.orderFrontRegardless() }
     }
 
     func updateDisplay() {
-        guard let geometry = DisplayGeometry.resolve(model.preferences) else { panel.orderOut(nil); return }
+        guard let geometry = DisplayGeometry.resolve(model.preferences) else {
+            self.geometry = nil
+            panel.orderOut(nil)
+            return
+        }
         self.geometry = geometry
         model.displayScreen = geometry.screen
         model.cameraWidth = geometry.cameraWidth
@@ -212,6 +260,10 @@ final class NotchPanel: NSPanel {
     func stop() {
         lockObservers.forEach { DistributedNotificationCenter.default().removeObserver($0) }
         lockObservers.removeAll()
+        workspaceObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
+        workspaceObservers.removeAll()
+        unlockWatchdog?.invalidate()
+        unlockWatchdog = nil
         model.onSurfaceChanged = nil
         if let pointerMonitor { NSEvent.removeMonitor(pointerMonitor) }
         if let localPointerMonitor { NSEvent.removeMonitor(localPointerMonitor) }

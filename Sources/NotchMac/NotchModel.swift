@@ -145,6 +145,7 @@ struct SystemOSD: Equatable {
     }
 
     var presentation: Presentation {
+        if screenLocked { return media.snapshot == nil ? .idle : .collapsed }
         if osd != nil && trailingVolume == nil {
             if !screenLocked && preservesMediaArtwork && (hovering || pinned || scrubbing) { return .expanded }
             return .osd
@@ -168,12 +169,21 @@ struct SystemOSD: Equatable {
         }
         return min(availableWidth - 32, requested)
     }
-    var bodyHeight: CGFloat {
+    var contentHeight: CGFloat {
         switch presentation {
         case .idle, .collapsed, .osd, .notice: collapsedHeight
         case .peek: cameraHeight + 56
         case .expanded: cameraHeight + (media.snapshot?.isBrowserAudio == true ? 84 : 138)
         }
+    }
+    private var expandedEdgeInset: CGFloat { presentation == .expanded ? 2 : 0 }
+    private var collapsedTrailingExtension: CGFloat { presentation == .collapsed ? 1 : 0 }
+    private var surfaceWidth: CGFloat { bodyWidth - 2 * expandedEdgeInset + collapsedTrailingExtension }
+    private var surfaceOffset: CGFloat { bodyOffset + collapsedTrailingExtension / 2 }
+    private var surfaceHeight: CGFloat {
+        // Size the silhouette independently of the player's layout proposal.
+        let bottomClearance: CGFloat = presentation == .expanded && media.snapshot?.isBrowserAudio != true ? 8 : 0
+        return contentHeight + bottomClearance - expandedEdgeInset
     }
     var bodyOffset: CGFloat {
         if presentation == .collapsed { return (compactTrailingWidth - compactLeadingWidth) / 2 }
@@ -196,24 +206,31 @@ struct SystemOSD: Equatable {
     }
     var radius: CGFloat { presentation == .expanded ? 70 * uiScale : presentation == .peek ? 24 : 12 }
     var earRadius: CGFloat { presentation == .expanded ? 12 : presentation == .peek ? 8 : 6 }
+    var expandedWaveformInset: CGFloat {
+        // Align the right edge of the waveform slot with the remaining time.
+        let trailingInset = media.snapshot?.canControl == true ? SeekBar.horizontalInset : 18
+        return trailingInset + WaveformView.width / 2
+    }
+
     var surfaceTarget: NotchSurface {
         if showsMediaBubble {
-            return .init(width: bodyWidth, height: bodyHeight, offset: bodyOffset,
+            return .init(width: surfaceWidth, height: surfaceHeight, offset: surfaceOffset,
                          radius: presentation == .expanded ? 30 : radius,
                          ear: earRadius, artworkX: -25, artworkY: collapsedHeight / 2, artworkSize: 20)
         }
         let waveformInset: CGFloat = switch presentation {
-        case .expanded: 18 + WaveformView.width / 2
+        case .expanded: expandedWaveformInset
         case .peek: 14 + WaveformView.width / 2
         default: compactTrailingWidth / 2
         }
         let size: CGFloat = presentation == .expanded ? 56 : presentation == .peek ? 40 : min(28, cameraHeight - 4)
         let x: CGFloat = presentation == .expanded ? 46 : presentation == .peek ? 34 : compactLeadingWidth / 2
         let y: CGFloat = presentation == .expanded ? cameraHeight + 20 : presentation == .peek ? cameraHeight + 22 : collapsedHeight / 2
-        return .init(width: bodyWidth, height: bodyHeight, offset: bodyOffset,
+        return .init(width: surfaceWidth, height: surfaceHeight, offset: surfaceOffset,
                      radius: presentation == .expanded ? 30 : radius,
-                     ear: earRadius, artworkX: x, artworkY: y, artworkSize: size,
-                     waveformInset: waveformInset, waveformY: presentation == .collapsed ? cameraHeight / 2 : y)
+                     ear: earRadius, artworkX: x - expandedEdgeInset, artworkY: y, artworkSize: size,
+                     waveformInset: waveformInset - expandedEdgeInset + collapsedTrailingExtension,
+                     waveformY: presentation == .collapsed ? cameraHeight / 2 : y)
     }
     func present(_ surface: NotchSurface) { presentedSurface = surface; onSurfaceChanged?() }
     func presentSatellite(_ satellite: NotchSatellite, frame: CGRect?) {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.4 (build 88)
+
+- Aligned the expanded waveform with the remaining-time label and softened the edges of overflowing track names.
+- Refined the expanded player outline and moved the collapsed notch’s right edge out by one point.
+- Improved recovery after unlocking and suspended keyboard shortcuts and media key handling while locked.
+
 ## 1.1.3 (build 78)
 
 - AirPods, charging, and media satellites stretch out of the notch and merge back through a liquid bridge. Click targets and edge lighting follow their animated positions.
