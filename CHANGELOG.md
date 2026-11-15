@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.4 (build 99)
+
+- Kept the notch visible and anchored to the same screen position during Spaces swipes, fullscreen transitions, and Mission Control.
+
 ## 1.1.3 (build 92)
 
 - Reduced CPU use during playback by updating waveform drawing layers without relaying out the notch.

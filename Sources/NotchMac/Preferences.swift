@@ -50,8 +50,11 @@ struct DisplayGeometry {
 
     @MainActor static func resolve(_ preferences: Preferences) -> DisplayGeometry? {
         let screens = NSScreen.screens
-        guard let screen = screens.first(where: { $0.displayID == preferences.selectedDisplay })
-                ?? screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main ?? screens.first else { return nil }
+        let preferred = screens.first { $0.displayID == preferences.selectedDisplay }
+        let notched = screens.first { $0.safeAreaInsets.top > 0 }
+        let builtIn = screens.first { CGDisplayIsBuiltin($0.displayID) != 0 }
+        let primary = screens.first { $0.displayID == CGMainDisplayID() }
+        guard let screen = preferred ?? notched ?? builtIn ?? primary ?? screens.first else { return nil }
         let leftWidth = screen.auxiliaryTopLeftArea?.width
         let rightWidth = screen.auxiliaryTopRightArea?.width
         let detectedWidth = leftWidth.flatMap { left in rightWidth.map { screen.frame.width - left - $0 } } ?? 180

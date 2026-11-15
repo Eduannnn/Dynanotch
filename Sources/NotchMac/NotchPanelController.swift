@@ -9,6 +9,11 @@ final class NotchPanel: NSPanel {
     override var canBecomeKey: Bool { acceptsKeyboard }
     override var canBecomeMain: Bool { false }
     override func cancelOperation(_ sender: Any?) { onEscape?() }
+
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        // The notch is positioned against the physical screen, including the menu-bar area.
+        frameRect
+    }
 }
 
 @MainActor final class NotchPanelController {
@@ -24,6 +29,7 @@ final class NotchPanel: NSPanel {
     private var workspaceObservers: [NSObjectProtocol] = []
     private var unlockWatchdog: Timer?
     private var geometry: DisplayGeometry?
+    private lazy var overlaySpace = NotchOverlaySpace()
 
     init(model: NotchModel) {
         self.model = model
@@ -39,7 +45,7 @@ final class NotchPanel: NSPanel {
         panel.animationBehavior = .none
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 3)
         panel.canBecomeVisibleWithoutLogin = model.preferences.showOnLockScreen
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        panel.collectionBehavior = [.canJoinAllSpaces, .canJoinAllApplications, .stationary, .ignoresCycle]
         panel.acceptsMouseMovedEvents = true
         panel.ignoresMouseEvents = true
         panel.onEscape = { [weak model] in model?.close() }
@@ -151,19 +157,24 @@ final class NotchPanel: NSPanel {
         panel.acceptsKeyboard = !locked
         if locked { panel.ignoresMouseEvents = true }
         if !shouldShow { panel.orderOut(nil) }
+        if locked || !shouldShow { overlaySpace?.detach() }
         panel.level = locked && shouldShow
             ? NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
             : NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 3)
         model.configuredVisibleWithoutLogin = panel.canBecomeVisibleWithoutLogin
         model.configuredWindowLevel = panel.level.rawValue
         if locked { model.lastLockedWindowLevel = panel.level.rawValue }
-        if shouldShow, geometry != nil { panel.orderFrontRegardless() }
+        if shouldShow, geometry != nil {
+            panel.orderFrontRegardless()
+            if !locked { overlaySpace?.attach(panel) }
+        }
     }
 
     func updateDisplay() {
         guard let geometry = DisplayGeometry.resolve(model.preferences) else {
             self.geometry = nil
             panel.orderOut(nil)
+            overlaySpace?.detach()
             return
         }
         self.geometry = geometry
@@ -173,7 +184,7 @@ final class NotchPanel: NSPanel {
         model.availableWidth = geometry.screen.frame.width
         model.brightness.useDisplay(geometry.screen.displayID)
         let frame = NSRect(x: geometry.centerX - NotchRootView.canvasWidth / 2, y: geometry.screen.frame.maxY - NotchRootView.canvasHeight, width: NotchRootView.canvasWidth, height: NotchRootView.canvasHeight)
-        panel.setFrame(frame, display: true)
+        if panel.frame != frame { panel.setFrame(frame, display: true) }
     }
 
     private var bodyRect: NSRect {
@@ -271,5 +282,6 @@ final class NotchPanel: NSPanel {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         panel.orderOut(nil)
+        overlaySpace?.detach()
     }
 }
