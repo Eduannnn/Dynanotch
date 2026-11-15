@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.3 (build 78)
+## 1.1.0 (build 78)
 
 - AirPods, charging, and media satellites stretch out of the notch and merge back through a liquid bridge. Click targets and edge lighting follow their animated positions.
 - The waveform moves with the player when opening and closing quickly. AirPods artwork stays anchored as the battery details collapse.
