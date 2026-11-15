@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 import NotchCore
 
 private struct StaticNotchPreviewKey: EnvironmentKey { static let defaultValue = false }
@@ -49,7 +50,9 @@ struct NotchRootView: View {
         let surface = staticPreview ? model.surfaceTarget : motion.surface
         let playing = model.media.snapshot?.isPlaying == true
         let expanded = model.presentation == .expanded
-        let waveformVisible = model.media.snapshot != nil && [.collapsed, .peek, .expanded].contains(model.presentation)
+        let compactVolume = model.compactVolume
+        let waveformVisible = compactVolume == nil && model.media.snapshot != nil
+            && [.collapsed, .peek, .expanded].contains(model.presentation)
         let mediaVisible = model.media.snapshot != nil && ([.collapsed, .peek, .expanded].contains(model.presentation)
             || model.preservesMediaArtwork || model.showsMediaBubble)
         let left = (Self.canvasWidth - surface.width) / 2 + surface.offset
@@ -170,11 +173,19 @@ struct NotchRootView: View {
                 .animation(IslandMotion.fade, value: model.presentation)
                 .frame(width: surface.width, height: surface.height, alignment: .top)
                 .overlay(alignment: .topLeading) {
-                    WaveformView(model: model, waveform: model.waveform)
+                    WaveformView(model: model, waveform: model.waveform, visible: waveformVisible)
                         .position(x: surface.width - surface.waveformInset, y: surface.waveformY)
                         .opacity(waveformVisible ? 1 : 0)
                         .animation(IslandMotion.fade, value: waveformVisible)
                         .allowsHitTesting(false)
+                    if let compactVolume {
+                        NotchVolumeBar(osd: compactVolume, showsMuteMark: true)
+                            .position(x: surface.width - surface.waveformInset, y: surface.waveformY)
+                            .animation(reduceMotion ? nil : IslandMotion.shape, value: compactVolume.level)
+                            .accessibilityLabel("Volume")
+                            .accessibilityValue(compactVolume.label)
+                            .allowsHitTesting(false)
+                    }
                 }
                 .padding(.horizontal, surface.ear)
                 .clipShape(NotchSilhouette(radius: surface.radius, ear: surface.ear))
@@ -808,19 +819,139 @@ struct WaveformView: View {
     static let width: CGFloat = 26
 
     @ObservedObject var model: NotchModel
-    @ObservedObject var waveform: WaveformService
+    var waveform: WaveformService
+    var visible: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.staticNotchPreview) private var staticPreview
+
+    var body: some View {
+        Group {
+            if staticPreview {
+                WaveformPreview(waveform: waveform, accent: model.accent,
+                                moving: model.media.snapshot?.isPlaying == true && !reduceMotion)
+            } else {
+                LiveWaveform(waveform: waveform, accent: NSColor(model.accent),
+                             playing: model.media.snapshot?.isPlaying == true,
+                             visible: visible, reduceMotion: reduceMotion)
+            }
+        }
+        .frame(width: Self.width, height: 26)
+        .accessibilityHidden(true)
+        .help("Live system audio waveform")
+    }
+}
+
+private struct WaveformPreview: View {
+    @ObservedObject var waveform: WaveformService
+    var accent: Color
+    var moving: Bool
+
     var body: some View {
         HStack(alignment: .center, spacing: 2) {
             ForEach(0..<6) { i in
-                let level = !reduceMotion && waveform.active && model.media.snapshot?.isPlaying == true ? waveform.levels[i] : 0
-                Capsule().fill(model.accent)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: model.accent)
+                let level = moving && waveform.active ? waveform.levels[i] : 0
+                Capsule().fill(accent)
                     .frame(width: 2.2, height: 3 + 22 * level)
             }
-        }.frame(width: Self.width, height: 26)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: model.media.snapshot?.isPlaying == true)
-            .accessibilityHidden(true).help(waveform.active ? "Measured live system audio" : "Allow system audio in Settings for the live waveform")
+        }
+    }
+}
+
+/// Audio frames change only six layer bounds, independently of the SwiftUI layout.
+private struct LiveWaveform: NSViewRepresentable {
+    var waveform: WaveformService
+    var accent: NSColor
+    var playing: Bool
+    var visible: Bool
+    var reduceMotion: Bool
+
+    func makeNSView(context: Context) -> WaveformLayerView {
+        WaveformLayerView(waveform: waveform)
+    }
+
+    func updateNSView(_ view: WaveformLayerView, context: Context) {
+        view.update(accent: accent, moving: playing && visible && !reduceMotion, animate: visible && !reduceMotion)
+    }
+}
+
+@MainActor private final class WaveformLayerView: NSView {
+    private let bars = (0..<6).map { _ in CALayer() }
+    private let waveform: WaveformService
+    private var subscription: AnyCancellable?
+    private var moving = false
+    private var animatesChanges = false
+    private var color: CGColor?
+
+    init(waveform: WaveformService) {
+        self.waveform = waveform
+        super.init(frame: .zero)
+        wantsLayer = true
+        for (index, bar) in bars.enumerated() {
+            bar.bounds = CGRect(x: 0, y: 0, width: 2.2, height: 3)
+            bar.position = CGPoint(x: WaveformView.width / 2 + (CGFloat(index) - 2.5) * 4.2, y: 13)
+            bar.cornerRadius = 1.1
+            layer?.addSublayer(bar)
+        }
+        subscription = waveform.$levels.sink { [weak self] levels in
+            guard let self, self.moving else { return }
+            self.setLevels(levels, settle: !self.waveform.active && self.animatesChanges)
+        }
+    }
+
+    required init?(coder: NSCoder) { nil }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func update(accent: NSColor, moving: Bool, animate: Bool) {
+        animatesChanges = animate
+        let nextColor = accent.cgColor
+        if color != nextColor {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            for bar in bars {
+                let previous = bar.presentation()?.backgroundColor ?? color
+                bar.backgroundColor = nextColor
+                if animate, let previous {
+                    let change = CABasicAnimation(keyPath: "backgroundColor")
+                    change.fromValue = previous
+                    change.duration = 0.3
+                    change.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    bar.add(change, forKey: "accent")
+                } else {
+                    bar.removeAnimation(forKey: "accent")
+                }
+            }
+            CATransaction.commit()
+            color = nextColor
+        }
+        if self.moving != moving {
+            self.moving = moving
+            if moving {
+                for bar in bars { bar.removeAnimation(forKey: "settle") }
+            }
+            setLevels(moving ? waveform.levels : [], settle: !moving && animate)
+        }
+        if !animate {
+            for bar in bars { bar.removeAllAnimations() }
+        }
+    }
+
+    private func setLevels(_ levels: [Double], settle: Bool = false) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (index, bar) in bars.enumerated() {
+            let height = index < levels.count ? 3 + 22 * levels[index] : 3
+            guard bar.bounds.height != height else { continue }
+            let previous = settle ? bar.presentation()?.bounds ?? bar.bounds : nil
+            bar.bounds.size.height = height
+            if let previous, previous.height != height {
+                let change = CABasicAnimation(keyPath: "bounds")
+                change.fromValue = NSValue(rect: previous)
+                change.duration = 0.15
+                change.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                bar.add(change, forKey: "settle")
+            }
+        }
+        CATransaction.commit()
     }
 }
 

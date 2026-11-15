@@ -163,6 +163,12 @@ import NotchCore
         render(musicLayout, output.appendingPathComponent("music-with-airpods-and-charging.png"))
         musicLayout.previewNotice(battery: 0.75)
         render(musicLayout, output.appendingPathComponent("airpods-connected-with-music-and-charging.png"))
+        musicLayout.osd = .init(kind: .volume, level: 0.6, muted: false)
+        let compactVolumeReplacesWaveformWithNotices = musicLayout.presentation == .collapsed
+            && musicLayout.compactVolume?.level == 0.6 && musicLayout.trailingVolume == nil
+            && musicLayout.leadingAirPods != nil && musicLayout.trailingCharge != nil
+        render(musicLayout, output.appendingPathComponent("compact-volume-with-airpods-and-charging.png"))
+        musicLayout.osd = nil
         let nativeCombinedWins = AirPodsBatteryDetails(left: 0.68, right: 0.43,
                                                        chargingCase: 0.92, combined: 0.45).listeningLevel == 0.45
         let missingCombinedUsesEarbuds = AirPodsBatteryDetails(left: 0.68, right: 0.43,
@@ -287,6 +293,7 @@ import NotchCore
                 "airPodsMorphIntermediate": sawIntermediateWidth, "airPodsMorphReopened": reopened,
                 "airPodsMorphCollapsed": collapsedAgain, "airPodsMorphDisconnected": disconnected,
                 "volumeKeepsCover": volumeKeepsCover, "volumeKeepsExpanded": volumeKeepsExpanded,
+                "compactVolumeReplacesWaveformWithNotices": compactVolumeReplacesWaveformWithNotices,
                 "pausedVolumeUsesIcon": pausedVolumeUsesIcon,
                 "volumePillPreservesNotice": volumePillPreservesNotice,
                 "airPodsFirst": airPodsFirst, "chargerFirst": chargerFirst,
@@ -303,6 +310,7 @@ import NotchCore
                 "motionSettled": motionSettled, "motionFrames": motion.frameCount,
                 "finalWidth": motion.surface.width, "finalHeight": motion.surface.height,
                 "result": motionSettled && volumeKeepsCover && volumeKeepsExpanded && pausedVolumeUsesIcon
+                    && compactVolumeReplacesWaveformWithNotices
                     && trackChangeStaysCollapsed && noticeDisplacesMedia && bubbleRestoresMedia
                     && lockedCollapses && unlockRestoresExpansion && volumePillPreservesNotice
                     && survivesOldCutoff && inlineNoticeExpired

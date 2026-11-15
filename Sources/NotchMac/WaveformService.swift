@@ -95,7 +95,10 @@ private final class SpectrumMeter: @unchecked Sendable {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 let targets = self.meter.read()
-                self.levels = zip(self.levels, targets).map { old, next in old + (next - old) * (next > old ? 0.70 : 0.28) }
+                let updated = zip(self.levels, targets).map { old, next in
+                    next == 0 && old < 0.002 ? 0 : old + (next - old) * (next > old ? 0.70 : 0.28)
+                }
+                if updated != self.levels { self.levels = updated }
             }
         }
         timer?.tolerance = 0.002

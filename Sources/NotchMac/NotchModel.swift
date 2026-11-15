@@ -119,8 +119,13 @@ struct SystemOSD: Equatable {
     }
 
     var trailingVolume: SystemOSD? {
-        guard let osd, osd.kind == .volume, !screenLocked,
+        guard let osd, osd.kind == .volume, !screenLocked, compactVolume == nil,
               musicHasConnectionNotice || pairedConnectionNotices != nil || showsMediaBubble(for: basePresentation) else { return nil }
+        return osd
+    }
+    var compactVolume: SystemOSD? {
+        guard let osd, osd.kind == .volume, !screenLocked,
+              media.snapshot?.isPlaying == true, basePresentation == .collapsed else { return nil }
         return osd
     }
     static let volumePillWidth: CGFloat = 77
@@ -131,7 +136,7 @@ struct SystemOSD: Equatable {
         osd?.kind == .volume && trailingVolume == nil && media.snapshot?.isPlaying == true
     }
     let compactLeadingWidth: CGFloat = 38
-    let compactTrailingWidth: CGFloat = 38
+    var compactTrailingWidth: CGFloat { compactVolume == nil ? 38 : osdTrailingWidth }
     var collapsedHeight: CGFloat { cameraHeight + 2 }
     var osdLeadingWidth: CGFloat { preservesMediaArtwork ? compactLeadingWidth : 46 }
     var osdTrailingWidth: CGFloat { 55 + 22 }
@@ -146,6 +151,7 @@ struct SystemOSD: Equatable {
 
     var presentation: Presentation {
         if screenLocked { return media.snapshot == nil ? .idle : .collapsed }
+        if compactVolume != nil { return .collapsed }
         if osd != nil && trailingVolume == nil {
             if !screenLocked && preservesMediaArtwork && (hovering || pinned || scrubbing) { return .expanded }
             return .osd
@@ -426,7 +432,7 @@ struct SystemOSD: Equatable {
     private func updateNoticeTimer() {
         noticeTimer?.invalidate()
         noticeTimer = nil
-        guard let current = notices.current, osd == nil || trailingVolume != nil else {
+        guard let current = notices.current, osd == nil || compactVolume != nil || trailingVolume != nil else {
             noticeDeadlines.removeAll()
             return
         }

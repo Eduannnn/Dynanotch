@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.6 (build 92)
+
+- Reduced CPU use during playback by updating waveform drawing layers without relaying out the notch.
+- The volume bar replaces the collapsed waveform even while AirPods and charging bubbles are visible.
+
 ## 1.1.5 (build 89)
 
 - Fixed the play/pause button shrinking and bouncing before the icon transition.
