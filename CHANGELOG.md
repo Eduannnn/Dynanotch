@@ -1,16 +1,16 @@
 # Changelog
 
-## 1.1.5 (build 89)
+## 1.1.2 (build 89)
 
 - Fixed the play/pause button shrinking and bouncing before the icon transition.
 
-## 1.1.4 (build 88)
+## 1.1.1 (build 88)
 
 - Aligned the expanded waveform with the remaining-time label and softened the edges of overflowing track names.
 - Refined the expanded player outline and moved the collapsed notch’s right edge out by one point.
 - Improved recovery after unlocking and suspended keyboard shortcuts and media key handling while locked.
 
-## 1.1.3 (build 78)
+## 1.1.0 (build 78)
 
 - AirPods, charging, and media satellites stretch out of the notch and merge back through a liquid bridge. Click targets and edge lighting follow their animated positions.
 - The waveform moves with the player when opening and closing quickly. AirPods artwork stays anchored as the battery details collapse.
