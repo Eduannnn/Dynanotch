@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.5 (build 102)
+
+- Kept the notch visible on the macOS lock screen when the lock-screen setting is enabled.
+- On the lock screen, the center shows a padlock and ongoing media and device notices move to side bubbles.
+
 ## 1.1.4 (build 100)
 
 - Softened the notch and satellite keylines with system Liquid Glass and reduced the pointer highlight.

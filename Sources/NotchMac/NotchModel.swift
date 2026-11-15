@@ -96,7 +96,7 @@ struct SystemOSD: Equatable {
     }
 
     var leadingAirPods: DeviceNotice? {
-        guard musicHasConnectionNotice, let notice = mainNotice,
+        guard (screenLocked ? preferences.showNotices : musicHasConnectionNotice), let notice = mainNotice,
               notice.connected, notice.airPodsArtwork != nil else { return nil }
         return notice
     }
@@ -107,10 +107,15 @@ struct SystemOSD: Equatable {
     @Published var airPodsPillLighting = EdgeLighting()
 
     var trailingCharge: DeviceNotice? {
-        if musicHasConnectionNotice {
+        if musicHasConnectionNotice || (screenLocked && preferences.showNotices) {
             return pairedConnectionNotices?.charging ?? (mainNotice?.kind == .charging ? mainNotice : nil)
         }
         return presentation == .notice ? pairedConnectionNotices?.charging : nil
+    }
+    var lockScreenNotice: DeviceNotice? {
+        guard screenLocked, preferences.showNotices, let notice = mainNotice,
+              notice.kind != .charging, notice.id != leadingAirPods?.id else { return nil }
+        return notice
     }
     static let chargePillWidth: CGFloat = 56
     @Published var chargePillLighting = EdgeLighting()
@@ -133,7 +138,7 @@ struct SystemOSD: Equatable {
     static let volumePillGap: CGFloat = 8
     @Published var volumePillLighting = EdgeLighting()
     var preservesMediaArtwork: Bool {
-        osd?.kind == .volume && trailingVolume == nil && media.snapshot?.isPlaying == true
+        !screenLocked && osd?.kind == .volume && trailingVolume == nil && media.snapshot?.isPlaying == true
     }
     let compactLeadingWidth: CGFloat = 38
     var compactTrailingWidth: CGFloat { compactVolume == nil ? 38 : osdTrailingWidth }
@@ -141,6 +146,7 @@ struct SystemOSD: Equatable {
     var osdLeadingWidth: CGFloat { preservesMediaArtwork ? compactLeadingWidth : 46 }
     var osdTrailingWidth: CGFloat { 55 + 22 }
     var showsMediaBubble: Bool {
+        if screenLocked { return media.snapshot != nil }
         if presentation == .osd && preservesMediaArtwork { return false }
         return showsMediaBubble(for: presentation)
     }
@@ -150,7 +156,7 @@ struct SystemOSD: Equatable {
     }
 
     var presentation: Presentation {
-        if screenLocked { return media.snapshot == nil ? .idle : .collapsed }
+        if screenLocked { return .idle }
         if compactVolume != nil { return .collapsed }
         if osd != nil && trailingVolume == nil {
             if !screenLocked && preservesMediaArtwork && (hovering || pinned || scrubbing) { return .expanded }
@@ -176,7 +182,9 @@ struct SystemOSD: Equatable {
         return min(availableWidth - 32, requested)
     }
     var contentHeight: CGFloat {
-        switch presentation {
+        // The screen obstruction covers the top of the center notch.
+        if screenLocked { return cameraHeight + 22 }
+        return switch presentation {
         case .idle, .collapsed, .osd, .notice: collapsedHeight
         case .peek: cameraHeight + 56
         case .expanded: cameraHeight + (media.snapshot?.isBrowserAudio == true ? 84 : 138)
@@ -353,7 +361,7 @@ struct SystemOSD: Equatable {
     }
 
     func showOSD(_ value: SystemOSD) {
-        guard preferences.showOSD else { return }
+        guard preferences.showOSD, !screenLocked else { return }
         osdWork?.cancel(); osd = value; updateNoticeTimer()
         let work = DispatchWorkItem { [weak self] in self?.osd = nil; self?.updateNoticeTimer() }
         osdWork = work; DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
@@ -432,7 +440,7 @@ struct SystemOSD: Equatable {
     private func updateNoticeTimer() {
         noticeTimer?.invalidate()
         noticeTimer = nil
-        guard let current = notices.current, osd == nil || compactVolume != nil || trailingVolume != nil else {
+        guard let current = notices.current, screenLocked || osd == nil || compactVolume != nil || trailingVolume != nil else {
             noticeDeadlines.removeAll()
             return
         }

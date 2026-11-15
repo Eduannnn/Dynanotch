@@ -59,13 +59,25 @@ struct NotchRootView: View {
         let right = left + surface.width
         let satelliteY = max(0, (model.collapsedHeight - NotchModel.volumePillHeight) / 2)
         ZStack(alignment: .topLeading) {
-            BubbleSatellite(model: model, kind: .charge, item: model.trailingCharge,
-                            lane: .init(edge: right, y: satelliteY, width: NotchModel.chargePillWidth, side: .trailing)) { charge in
+            BubbleSatellite(model: model, kind: .charge, item: model.trailingCharge ?? model.lockScreenNotice,
+                            lane: .init(edge: right, y: satelliteY, width: NotchModel.chargePillWidth, side: .trailing)) { notice in
                 Capsule().fill(Color.notchSurface)
                     .overlay {
-                        ChargingBatteryGlyph(level: charge.battery)
-                            .id(charge.id)
-                            .offset(x: 1, y: 0.5)
+                        if notice.kind == .charging {
+                            ChargingBatteryGlyph(level: notice.battery)
+                                .id(notice.id)
+                                .offset(x: 1, y: 0.5)
+                        } else {
+                            let tint: Color = notice.kind == .batteryCritical ? .red : notice.kind == .batteryLow ? .orange : .white
+                            HStack(spacing: 5) {
+                                Image(systemName: notice.kind.symbol)
+                                if let battery = notice.battery {
+                                    Text("\(Int(battery * 100))%").monospacedDigit()
+                                }
+                            }
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(tint.opacity(notice.connected ? 1 : 0.6))
+                        }
                     }
                     .overlay {
                         SpecularGlassRim(surface: Capsule(), edge: Capsule(),
@@ -73,8 +85,8 @@ struct NotchRootView: View {
                                          strength: model.chargePillLighting.strength, staticPreview: staticPreview)
                     }
                     .frame(width: NotchModel.chargePillWidth, height: NotchModel.volumePillHeight)
-                    .accessibilityLabel("Charging")
-                    .accessibilityValue(charge.battery.map { "\(Int($0 * 100)) percent" } ?? "")
+                    .accessibilityLabel(notice.kind == .charging ? "Charging" : notice.name)
+                    .accessibilityValue(notice.battery.map { "\(Int($0 * 100)) percent" } ?? "")
             }
             .allowsHitTesting(false)
 
@@ -245,9 +257,21 @@ struct NotchRootView: View {
     @ViewBuilder private var content: some View {
         switch model.presentation {
         case .idle:
-            Color.clear.frame(width: model.cameraWidth, height: model.collapsedHeight)
-                .contentShape(Rectangle()).onTapGesture { model.openSettings?() }
-                .accessibilityLabel("Dynanotch Settings")
+            if model.screenLocked {
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: model.cameraHeight)
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 22)
+                        .accessibilityLabel("Mac locked")
+                }
+                .allowsHitTesting(false)
+            } else {
+                Color.clear.frame(width: model.cameraWidth, height: model.collapsedHeight)
+                    .contentShape(Rectangle()).onTapGesture { model.openSettings?() }
+                    .accessibilityLabel("Dynanotch Settings")
+            }
         case .collapsed:
             HStack(spacing: 0) {
                 Color.clear.frame(width: model.compactLeadingWidth)

@@ -47,24 +47,25 @@ import AppKit
         self.addWindows = addWindows
     }
 
-    func attach(_ window: NSWindow) {
-        guard !unavailable, window.windowNumber > 0 else { return }
+    func attach(_ window: NSWindow) -> Bool {
+        guard !unavailable, window.windowNumber > 0 else { return false }
         if space == nil {
             let id = create(connection, 1, nil)
-            guard id != 0 else { unavailable = true; return }
+            guard id != 0 else { unavailable = true; return false }
             let level: Int32 = 400
             setLevel(connection, id, level)
             guard getLevel(connection, id) == level else {
                 destroy(connection, id)
                 unavailable = true
-                return
+                return false
             }
             show(connection, [NSNumber(value: id)] as CFArray)
             space = id
         }
-        guard let space else { return }
+        guard let space else { return false }
         addWindows(connection, [NSNumber(value: window.windowNumber)] as CFArray,
                    [NSNumber(value: space)] as CFArray)
+        return true
     }
 
     func detach() {

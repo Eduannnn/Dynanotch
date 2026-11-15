@@ -168,6 +168,13 @@ import NotchCore
             && musicLayout.compactVolume?.level == 0.6 && musicLayout.trailingVolume == nil
             && musicLayout.leadingAirPods != nil && musicLayout.trailingCharge != nil
         render(musicLayout, output.appendingPathComponent("compact-volume-with-airpods-and-charging.png"))
+        musicLayout.screenLocked = true
+        let lockedBubblesActivities = musicLayout.presentation == .idle && musicLayout.showsMediaBubble
+            && musicLayout.leadingAirPods != nil && musicLayout.trailingCharge != nil
+            && musicLayout.compactVolume == nil && musicLayout.trailingVolume == nil
+            && !musicLayout.preservesMediaArtwork
+        render(musicLayout, output.appendingPathComponent("locked-with-music-airpods-and-charging.png"))
+        musicLayout.screenLocked = false
         musicLayout.osd = nil
         let nativeCombinedWins = AirPodsBatteryDetails(left: 0.68, right: 0.43,
                                                        chargingCase: 0.92, combined: 0.45).listeningLevel == 0.45
@@ -269,7 +276,8 @@ import NotchCore
             chargeExpiresFirst = musicLayout.trailingCharge == nil && musicLayout.leadingAirPods != nil
         }
         model.screenLocked = true
-        let lockedCollapses = model.presentation == .collapsed
+        let lockedCollapses = model.presentation == .idle && model.showsMediaBubble
+            && model.contentHeight > model.cameraHeight
         model.screenLocked = false
         let unlockRestoresExpansion = model.presentation == .expanded
         let motion = NotchAnimationCoordinator()
@@ -307,12 +315,13 @@ import NotchCore
                 "trackChangeStaysCollapsed": trackChangeStaysCollapsed,
                 "noticeDisplacesMedia": noticeDisplacesMedia, "bubbleRestoresMedia": bubbleRestoresMedia,
                 "lockedCollapses": lockedCollapses, "unlockRestoresExpansion": unlockRestoresExpansion,
+                "lockedBubblesActivities": lockedBubblesActivities,
                 "motionSettled": motionSettled, "motionFrames": motion.frameCount,
                 "finalWidth": motion.surface.width, "finalHeight": motion.surface.height,
                 "result": motionSettled && volumeKeepsCover && volumeKeepsExpanded && pausedVolumeUsesIcon
                     && compactVolumeReplacesWaveformWithNotices
                     && trackChangeStaysCollapsed && noticeDisplacesMedia && bubbleRestoresMedia
-                    && lockedCollapses && unlockRestoresExpansion && volumePillPreservesNotice
+                    && lockedCollapses && lockedBubblesActivities && unlockRestoresExpansion && volumePillPreservesNotice
                     && survivesOldCutoff && inlineNoticeExpired
                     && airPodsFirst && chargerFirst && pairedNoticeKeepsVolumeSeparate && musicKeepsCenter && musicKeepsBatteryReading && chargeExpiresFirst && bothNoticesExpired && airPodsMorphPassed && nativeCombinedWins && missingCombinedUsesEarbuds && unavailableChargeStaysUnknown ? "pass" : "fail",
                 "scope": "Actual app models and renderer with preview media; no external player commands."

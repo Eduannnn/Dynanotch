@@ -156,18 +156,20 @@ final class NotchPanel: NSPanel {
         panel.canBecomeVisibleWithoutLogin = showOnLockScreen
         panel.acceptsKeyboard = !locked
         if locked { panel.ignoresMouseEvents = true }
-        if !shouldShow { panel.orderOut(nil) }
-        if locked || !shouldShow { overlaySpace?.detach() }
-        panel.level = locked && shouldShow
-            ? NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
-            : NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 3)
+        let desktopLevel = NSWindow.Level.mainMenu + 3
+        if shouldShow, geometry != nil {
+            if panel.level != desktopLevel { panel.level = desktopLevel }
+            panel.orderFrontRegardless()
+            // SkyLight composites this space with lock-screen notifications as well as desktop Spaces.
+            let attached = overlaySpace?.attach(panel) ?? false
+            if locked && !attached { panel.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel())) }
+        } else {
+            panel.orderOut(nil)
+            overlaySpace?.detach()
+        }
         model.configuredVisibleWithoutLogin = panel.canBecomeVisibleWithoutLogin
         model.configuredWindowLevel = panel.level.rawValue
         if locked { model.lastLockedWindowLevel = panel.level.rawValue }
-        if shouldShow, geometry != nil {
-            panel.orderFrontRegardless()
-            if !locked { overlaySpace?.attach(panel) }
-        }
     }
 
     func updateDisplay() {
