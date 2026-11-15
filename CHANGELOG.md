@@ -1,6 +1,9 @@
 # Changelog
 
-## 1.1.4 (build 99)
+## 1.1.4 (build 100)
+
+- Softened the notch and satellite keylines with system Liquid Glass and reduced the pointer highlight.
+- Shortened the volume bar in the expanded player.
 
 - Kept the notch visible and anchored to the same screen position during Spaces swipes, fullscreen transitions, and Mission Control.
 

@@ -461,16 +461,17 @@ private struct LiquidBubbleBridge: Shape {
 }
 
 private struct NotchVolumeBar: View {
-    static let width: CGFloat = 55
+    static let standardWidth: CGFloat = 55
     let osd: SystemOSD
     let showsMuteMark: Bool
+    var width: CGFloat = NotchVolumeBar.standardWidth
     private let height: CGFloat = 6
 
     var body: some View {
-        Capsule().fill(.white.opacity(0.2)).frame(width: Self.width, height: height)
+        Capsule().fill(.white.opacity(0.2)).frame(width: width, height: height)
             .overlay(alignment: .leading) {
                 Capsule().fill(.white)
-                    .frame(width: osd.muted ? 0 : Self.width * unit(osd.level), height: height)
+                    .frame(width: osd.muted ? 0 : width * unit(osd.level), height: height)
             }
             .overlay {
                 if showsMuteMark && osd.muted {
@@ -535,8 +536,8 @@ struct ExpandedPlayerView: View {
         .overlay(alignment: .top) {
             if model.preservesMediaArtwork, let osd = model.osd {
                 let collapsedCenter = (model.cameraWidth + model.osdTrailingWidth) / 2
-                let insideEdge = (model.bodyWidth - NotchVolumeBar.width) / 2 - 4
-                NotchVolumeBar(osd: osd, showsMuteMark: true)
+                let insideEdge = (model.bodyWidth - NotchVolumeBar.standardWidth) / 2 - 4
+                NotchVolumeBar(osd: osd, showsMuteMark: true, width: 47)
                     .frame(height: model.cameraHeight)
                     .offset(x: min(collapsedCenter, insideEdge))
                     .animation(reduceMotion ? nil : IslandMotion.shape, value: osd.level)

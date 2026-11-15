@@ -29,22 +29,19 @@ struct SpecularGlassRim<Surface: Shape, Edge: Shape>: View {
     var body: some View {
         ZStack {
             edge.stroke(contrast == .increased ? Color(white: 0.4) : Color(red: 0.14, green: 0.14, blue: 0.16), lineWidth: 0.8)
+            if #available(macOS 26.0, *), !reduceTransparency, !staticPreview {
+                // Sample the surrounding backdrop with system glass and expose only its edge.
+                Color.clear
+                    .glassEffect(.regular, in: surface)
+                    .mask(edge.stroke(lineWidth: 1.4))
+                    .opacity(0.30)
+            }
             GeometryReader { proxy in
                 let center = UnitPoint(x: highlight.x, y: highlight.y)
                 let reach = max(20, min(140, proxy.size.width * 0.4))
-                ZStack {
-                    if #available(macOS 26.0, *), !reduceTransparency, !staticPreview {
-                        Color.clear
-                            .glassEffect(.regular.tint(Color.white.opacity(0.12)).interactive(), in: surface)
-                            .mask(edge.stroke(lineWidth: 2))
-                            .mask(RadialGradient(colors: [.white, .white.opacity(0.2), .clear],
-                                center: center, startRadius: 0, endRadius: reach))
-                            .opacity(0.5)
-                    }
-                    edge.stroke(RadialGradient(colors: [.white.opacity(0.48), .white.opacity(0.10), .clear],
-                        center: center, startRadius: 0, endRadius: reach), lineWidth: 0.8)
-                }
-                    .opacity(strength * 0.72)
+                edge.stroke(RadialGradient(colors: [.white.opacity(0.27), .white.opacity(0.07), .clear],
+                    center: center, startRadius: 0, endRadius: reach), lineWidth: 0.8)
+                    .opacity(strength * 0.58)
                     .animation(reduceMotion ? nil : .easeOut(duration: 0.10), value: highlight)
                     .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: strength)
             }
