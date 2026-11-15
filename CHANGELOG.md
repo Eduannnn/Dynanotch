@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.5 (build 89)
+
+- Fixed the play/pause button shrinking and bouncing before the icon transition.
+
 ## 1.1.4 (build 88)
 
 - Aligned the expanded waveform with the remaining-time label and softened the edges of overflowing track names.

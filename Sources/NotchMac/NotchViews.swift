@@ -691,6 +691,8 @@ private struct ExpandedTransportButton: View {
     var glyphWidth: CGFloat
     var glyphHeight: CGFloat
     var action: () -> Void
+    private var isPlayPause: Bool { symbol == "play.fill" || symbol == "pause.fill" }
+
     init(_ symbol: String, label: String, glyphWidth: CGFloat, glyphHeight: CGFloat, action: @escaping () -> Void) {
         self.symbol = symbol; self.label = label; self.glyphWidth = glyphWidth; self.glyphHeight = glyphHeight; self.action = action
     }
@@ -703,7 +705,7 @@ private struct ExpandedTransportButton: View {
                 if !staticPreview && (symbol == "forward.fill" || symbol == "backward.fill") {
                     NativeSkipGlyph(backwards: symbol == "backward.fill", trigger: skipTrigger, reduceMotion: reduceMotion)
                         .frame(width: glyphWidth, height: glyphHeight).allowsHitTesting(false)
-                } else if symbol == "play.fill" || symbol == "pause.fill" {
+                } else if isPlayPause {
                     // A fixed font/canvas prevents aspect-fit resizing before Magic Replace.
                     Image(systemName: symbol)
                         .font(.system(size: glyphHeight, weight: .semibold))
@@ -720,7 +722,9 @@ private struct ExpandedTransportButton: View {
                 }
             }
                 .frame(width: 56, height: 44).contentShape(Rectangle())
-        }.buttonStyle(PressScaleStyle()).accessibilityLabel(label).help(label)
+        }
+        .buttonStyle(PressScaleStyle(scalesWhenPressed: !isPlayPause))
+        .accessibilityLabel(label).help(label)
     }
     private var symbolTransition: ContentTransition {
         reduceMotion ? .identity : symbolReplaceTransition
@@ -1099,9 +1103,16 @@ struct SymbolButton: View {
 }
 
 struct PressScaleStyle: ButtonStyle {
+    var scalesWhenPressed = true
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.opacity(configuration.isPressed ? 0.65 : 1).scaleEffect(configuration.isPressed ? 0.9 : 1)
-            .animation(.spring(response: 0.22, dampingFraction: 0.7), value: configuration.isPressed)
+        if scalesWhenPressed {
+            configuration.label.opacity(configuration.isPressed ? 0.65 : 1)
+                .scaleEffect(configuration.isPressed ? 0.9 : 1)
+                .animation(.spring(response: 0.22, dampingFraction: 0.7), value: configuration.isPressed)
+        } else {
+            configuration.label.opacity(configuration.isPressed ? 0.65 : 1)
+        }
     }
 }
 
