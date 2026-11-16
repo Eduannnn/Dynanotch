@@ -8,35 +8,6 @@ Dynanotch brings a bit of the newer MacBooks’ Dynamic Island to your notch. On
 
 ![Expanded Apple Music player showing artwork, progress, Favorite, Previous, Pause, Next, and AirPlay](docs/images/player.jpg)
 
-## See it in action
-
-![Animated preview of the player, cover flip, and liquid AirPods and charging bubbles](docs/images/dynanotch-motion.gif)
-
-**AirPods connected while music is playing.** The connection bubble appears on the left, music stays in the center, and the MacBook’s charging pill sits on the right.
-
-![Compact music notch with an AirPods connection bubble on the left and a charging pill on the right](docs/images/airpods-connected.png)
-
-**Click the AirPods bubble for battery details.** The bubble grows into a pill with separate case, left, and right readings. AirPods Max shows a single reading.
-
-![Expanded AirPods battery pill showing three separate battery readings beside the compact player and charging pill](docs/images/airpods-battery-details.png)
-
-The demo and screenshots use sample media, waveform levels, and battery readings.
-
-**Where the physical notch sits.** The dashed outline marks the camera cutout on a notched MacBook. Artwork and the waveform stay on either side, with AirPods and charging in separate bubbles farther out.
-
-![Layout diagram showing the physical camera notch between the artwork and waveform, flanked by the AirPods and charging bubbles](docs/images/physical-notch-layout.png)
-
-**Expanded player.** The dashed overlay shows the same physical cutout above the title. The player grows down from the screen edge, with playback controls below the cutout.
-
-![Expanded player with the physical camera notch outlined directly above the song title](docs/images/physical-notch-expanded.png)
-
-## What it does
-
-- **Now playing.** Expand the notch to see artwork, scrolling track information, a seek bar, and playback controls for Music and Spotify. Music also supports favorites and AirPlay output selection. Track changes flip the cover in place, and the waveform and progress bar take their accent from the artwork.
-- **Audio from other apps.** Browser and other supported app audio can show an app icon and live waveform. Dynanotch does not read individual browser tabs for track metadata or playback controls.
-- **AirPods.** Connection notices show the reported listening battery level and play one rotation of the pairing animation before dismissing. Click the left AirPods satellite to keep the pill open and see separate case, left, and right readings. Headphones such as AirPods Max show a single reading. Missing readings stay unavailable.
-- **Charging and volume.** Charging and volume can use their own trailing pill when the main notch is occupied. Volume changes during playback keep the artwork visible; an × marks mute.
-
 ## Download
 
 Download the precompiled Apple Silicon ZIP from the [latest release](https://github.com/Eduannnn/Dynanotch/releases/latest). The app is ad hoc signed and unnotarized. The ZIP includes a README with commands for signing your copy using your own Apple Development certificate. You can also build and sign it from source below.
@@ -50,6 +21,52 @@ Download the precompiled Apple Silicon ZIP from the [latest release](https://git
 | Other macOS versions | Not verified for this release. The deployment target is macOS 14.4; Liquid Glass requires macOS 26 or later. |
 
 The app reads optional artwork and animations from the installed macOS. Missing resources fall back to SF Symbols.
+
+## Now playing
+
+Expand the notch to see album artwork, scrolling track information, a seek bar, and playback controls for Music and Spotify. Apple Music also supports favorites and AirPlay output selection. Track changes flip the cover in place, and the waveform and progress bar take their accent from the artwork.
+
+Browser and other supported app audio can show an app icon and live waveform. Dynanotch does not read individual browser tabs for track metadata or playback controls.
+
+## AirPods, charging, and volume
+
+AirPods connection notices show the reported listening battery level and play one rotation of the pairing animation before dismissing. When AirPods connect while music is playing and the Mac is charging, AirPods appear on the left, music stays in the center, and charging sits on the right.
+
+![Compact music notch with an AirPods connection bubble on the left and a charging pill on the right](docs/images/airpods-connected.png)
+
+Click the AirPods bubble to keep the pill open and see separate case, left, and right readings. AirPods Max shows a single reading. Missing readings stay unavailable.
+
+![Expanded AirPods battery pill showing three separate battery readings beside the compact player and charging pill](docs/images/airpods-battery-details.png)
+
+Charging and volume can use their own trailing pill when the main notch is occupied. Volume changes during playback keep the artwork visible, and an × marks mute.
+
+## How it fits around the camera
+
+The dashed outlines mark the physical camera cutout. In compact mode, artwork and the waveform sit on either side. The expanded player grows down from the screen edge, with controls below the cutout.
+
+| Compact | Expanded |
+| --- | --- |
+| ![Compact layout with artwork and waveform on either side of the physical notch](docs/images/physical-notch-layout.png) | ![Expanded player with the physical notch directly above the song title](docs/images/physical-notch-expanded.png) |
+
+The screenshots and demo use sample media, waveform levels, and battery readings.
+
+## Use the notch
+
+- Hover over an active compact notch to expand it temporarily. Click to pin it open; press Escape or click outside to collapse.
+- Open Settings from the menu-bar icon or by reopening Dynanotch from Applications. With Accessibility enabled, press **⌘,** while the pointer is over the notch.
+- In General settings, preview AirPods notices by model, choose a Max color, and simulate missing battery information. Preview readings are sample values and do not connect a device.
+
+![Animated preview of the player, cover flip, and liquid AirPods and charging bubbles](docs/images/dynanotch-motion.gif)
+
+### Permissions
+
+| macOS permission | Used for |
+| --- | --- |
+| Automation | Reading and controlling Music or Spotify when you use that player |
+| System audio recording | Measuring live audio for the waveform; no microphone input or recordings written to disk |
+| Accessibility | The notch Settings shortcut and optional replacement for the volume and brightness overlays |
+
+Quit Dynanotch before removing or re-granting Accessibility. See the [input incident notes](docs/incident-2026-11-10.md) for the confirmed findings and remaining uncertainty.
 
 ## Build from source
 
@@ -76,20 +93,6 @@ The script builds a release app and verifies its signature. If you have several 
 3. Choose **Product → Run**. To build without launching, choose **Product → Build** and find the app in Xcode’s Products group.
 
 For everyday use, keep a single copy in Applications. Quit the running app before replacing it. Keep its bundle identifier and signing identity stable between updates to help macOS retain permission grants.
-
-## Use the notch
-
-- Hover over an active compact notch to expand it temporarily. Click to pin it open; press Escape or click outside to collapse.
-- Open Settings from the menu-bar icon or by reopening Dynanotch from Applications. With Accessibility enabled, press **⌘,** while the pointer is over the notch.
-- In General settings, preview AirPods notices by model, choose a Max color, and simulate missing battery information. Preview readings are sample values and do not connect a device.
-
-| macOS permission | Used for |
-| --- | --- |
-| Automation | Reading and controlling Music or Spotify when you use that player |
-| System audio recording | Measuring live audio for the waveform; no microphone input or recordings written to disk |
-| Accessibility | The notch Settings shortcut and optional replacement for the volume and brightness overlays |
-
-Quit Dynanotch before removing or re-granting Accessibility. See the [input incident notes](docs/incident-2026-11-10.md) for the confirmed findings and remaining uncertainty.
 
 ## Development
 
