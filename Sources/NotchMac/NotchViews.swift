@@ -258,14 +258,14 @@ struct NotchRootView: View {
         switch model.presentation {
         case .idle:
             if model.screenLocked {
-                VStack(spacing: 0) {
-                    Color.clear.frame(height: model.cameraHeight)
+                HStack(spacing: 0) {
                     Image(systemName: "lock.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 22)
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: model.compactLeadingWidth)
                         .accessibilityLabel("Mac locked")
+                    Color.clear.frame(width: model.cameraWidth)
                 }
+                .frame(height: model.cameraHeight)
                 .allowsHitTesting(false)
             } else {
                 Color.clear.frame(width: model.cameraWidth, height: model.collapsedHeight)

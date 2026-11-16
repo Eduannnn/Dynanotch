@@ -1,9 +1,9 @@
 # Changelog
 
-## 1.1.5 (build 102)
+## 1.1.5 (build 103)
 
 - Kept the notch visible on the macOS lock screen when the lock-screen setting is enabled.
-- On the lock screen, the center shows a padlock and ongoing media and device notices move to side bubbles.
+- On the lock screen, a padlock appears in the notch’s leading wing and ongoing media and device notices move to side bubbles.
 
 ## 1.1.4 (build 100)
 

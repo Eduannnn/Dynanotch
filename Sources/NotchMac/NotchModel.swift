@@ -172,7 +172,7 @@ struct SystemOSD: Equatable {
     var bodyWidth: CGFloat {
         let requested: CGFloat
         switch presentation {
-        case .idle: requested = cameraWidth
+        case .idle: requested = cameraWidth + (screenLocked ? compactLeadingWidth : 0)
         case .collapsed: requested = cameraWidth + compactLeadingWidth + compactTrailingWidth
         case .peek: requested = max(expandedWidth * 0.94, cameraWidth + 80)
         case .notice: requested = cameraWidth + noticeLeadingWidth + noticeTrailingWidth
@@ -182,9 +182,7 @@ struct SystemOSD: Equatable {
         return min(availableWidth - 32, requested)
     }
     var contentHeight: CGFloat {
-        // The screen obstruction covers the top of the center notch.
-        if screenLocked { return cameraHeight + 22 }
-        return switch presentation {
+        switch presentation {
         case .idle, .collapsed, .osd, .notice: collapsedHeight
         case .peek: cameraHeight + 56
         case .expanded: cameraHeight + (media.snapshot?.isBrowserAudio == true ? 84 : 138)
@@ -200,6 +198,7 @@ struct SystemOSD: Equatable {
         return contentHeight + bottomClearance - expandedEdgeInset
     }
     var bodyOffset: CGFloat {
+        if screenLocked { return -compactLeadingWidth / 2 }
         if presentation == .collapsed { return (compactTrailingWidth - compactLeadingWidth) / 2 }
         if presentation == .notice { return (noticeTrailingWidth - noticeLeadingWidth) / 2 }
         if presentation == .osd { return (osdTrailingWidth - osdLeadingWidth) / 2 }

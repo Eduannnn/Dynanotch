@@ -277,7 +277,9 @@ import NotchCore
         }
         model.screenLocked = true
         let lockedCollapses = model.presentation == .idle && model.showsMediaBubble
-            && model.contentHeight > model.cameraHeight
+            && model.contentHeight == model.collapsedHeight
+            && model.bodyWidth == model.cameraWidth + model.compactLeadingWidth
+            && model.bodyOffset == -model.compactLeadingWidth / 2
         model.screenLocked = false
         let unlockRestoresExpansion = model.presentation == .expanded
         let motion = NotchAnimationCoordinator()
