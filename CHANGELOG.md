@@ -1,5 +1,7 @@
 ## v1.2.0
 
+- Notchless display layout: smaller floating pill, idle pill-to-dot-to-hidden transition, activity/hover restoration, and scaled click targets.
+
 - Universal 2 app for Apple Silicon and Intel; macOS 13 deployment target with experimental Ventura compatibility fallbacks.
 - Editable JSON themes for every presentation and activity state, per-element styling, custom layers, automatic reload, and recovery from invalid edits.
 - Optional expanded clear-glass refraction, black camera fade, and adjustable contrast; collapsed view stays black.

@@ -31,6 +31,9 @@ import UserNotifications
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let args = ProcessInfo.processInfo.arguments
+        if let index = args.firstIndex(of: "--verify-notchless"), args.indices.contains(index + 1) {
+            verificationOnly = true; AppVerification.runNotchless(directory: args[index + 1]); return
+        }
         if let index = args.firstIndex(of: "--verify-themes"), args.indices.contains(index + 1) {
             verificationOnly = true; AppVerification.runThemes(directory: args[index + 1]); return
         }

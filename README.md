@@ -18,6 +18,8 @@ The v1.2.0 download includes **arm64 and x86_64 in one app**. Choose the Univers
 
 JSON themes live in `~/Library/Application Support/Dynanotch/Themes`. Open them through **Settings → JSON themes → Open theme files**. `global.json` supplies shared defaults; collapsed, expanded, notice, AirPods, charging, OSD, browser, locked, and unlocking files override individual states. `REFERENCE.json` explains the element, layout, typography, glass, symbol, waveform, and animation controls. Changes reload automatically; malformed files retain the last working theme. Default templates are in `Resources/Themes`.
 
+On displays without a hardware notch, the app uses a smaller floating pill. While idle it shrinks to a dot after five seconds, then hides two seconds later. Activity or hovering near the pill location restores it. Scale, inset, and idle timings are editable in `notchless.json`. This layout also applies to external displays without a notch.
+
 The player opens on click. Hovering produces a small swell. Optional expanded Liquid Glass uses native compositor refraction and a black camera fade; the collapsed notch stays black. The refraction renderer uses private macOS APIs, so its availability can change between macOS releases.
 
 ### macOS compatibility

@@ -39,7 +39,7 @@ struct NotchTheme {
 
 @MainActor final class NotchThemeStore: ObservableObject {
     static let shared = NotchThemeStore()
-    static let states = ["idle", "collapsed", "expanded", "peek", "notice", "osd", "airpods", "charging", "volume", "brightness", "browser", "locked", "unlocking"]
+    static let states = ["idle", "collapsed", "expanded", "peek", "notice", "osd", "airpods", "charging", "volume", "brightness", "browser", "locked", "unlocking", "notchless"]
     static let elementNames = ["surface", "artwork", "title", "artist", "metadata", "waveform", "progress",
         "elapsed", "remaining", "controls", "previous", "playPause", "next", "favorite", "airplay", "notice",
         "osd", "bubble.music", "bubble.lock", "bubble.airpods", "bubble.charging", "bubble.volume", "airpods.details"]
@@ -209,6 +209,7 @@ struct NotchTheme {
                 "waveformInset": nullable, "waveformY": nullable, "headerSpacing": 10, "metadataSpacing": 6,
                 "headerPadding": 18, "headerTop": 8, "metadataY": -7, "controlsSpacing": 7,
                 "controlsTop": 2, "controlsPadding": 24, "progressTop": 2, "progressPadding": 24,
+                "notchlessScale": 0.85, "notchlessTopInset": 6, "idlePillWidth": 64, "idlePillSeconds": 5, "idleDotSeconds": 2,
                 "bubbleSize": 32, "bubbleGap": 8, "airPodsExpandedWidth": 204,
                 "waveformBars": 6, "waveformBarWidth": 2.2, "waveformBarSpacing": 2,
                 "waveformMinHeight": 3, "waveformMaxHeight": 25, "waveformCornerRadius": 1.1],

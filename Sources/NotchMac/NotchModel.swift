@@ -23,6 +23,7 @@ struct SystemOSD: Equatable {
     let themes: NotchThemeStore
     var theme: NotchTheme {
         var variants: [String] = []
+        if !hasHardwareNotch { variants.append("notchless") }
         if media.snapshot?.isBrowserAudio == true { variants.append("browser") }
         if presentation == .notice, let notice = mainNotice {
             if notice.airPodsArtwork != nil { variants.append("airpods") }
@@ -44,6 +45,29 @@ struct SystemOSD: Equatable {
     let system = SystemService()
     let waveform = WaveformService()
     let mediaKeys = MediaKeyService()
+    @Published var hasHardwareNotch = true
+    enum IdlePillPhase: Equatable { case pill, dot, hidden }
+    @Published private(set) var idlePillPhase: IdlePillPhase = .pill
+    private var idlePillWork: DispatchWorkItem?
+    var notchScale: CGFloat { hasHardwareNotch ? 1 : max(0.6, min(1, theme.number("layout.notchlessScale", 0.85))) }
+    var notchTopInset: CGFloat { hasHardwareNotch ? 0 : max(0, theme.number("layout.notchlessTopInset", 6)) }
+    func updateIdlePill() {
+        idlePillWork?.cancel(); idlePillWork = nil
+        idlePillPhase = .pill
+        guard !hasHardwareNotch, presentation == .idle, !pointerInside else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, !self.hasHardwareNotch, self.presentation == .idle, !self.pointerInside else { return }
+            self.idlePillPhase = .dot
+            let hide = DispatchWorkItem { [weak self] in
+                guard let self, !self.hasHardwareNotch, self.presentation == .idle, !self.pointerInside else { return }
+                self.idlePillPhase = .hidden
+            }
+            self.idlePillWork = hide
+            DispatchQueue.main.asyncAfter(deadline: .now()+max(0.1, self.theme.number("layout.idleDotSeconds", 2)), execute: hide)
+        }
+        idlePillWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now()+max(0.1, theme.number("layout.idlePillSeconds", 5)), execute: work)
+    }
     @Published var cameraWidth: CGFloat = 180
     @Published var cameraHeight: CGFloat = 32
     @Published var availableWidth: CGFloat = 1280
@@ -207,7 +231,7 @@ struct SystemOSD: Equatable {
     var bodyWidth: CGFloat {
         let requested: CGFloat
         switch presentation {
-        case .idle: requested = cameraWidth + (showsLockLayout ? compactLeadingWidth : 0)
+        case .idle: requested = hasHardwareNotch ? cameraWidth + (showsLockLayout ? compactLeadingWidth : 0) : theme.number("layout.idlePillWidth", 64)
         case .collapsed: requested = cameraWidth + compactLeadingWidth + compactTrailingWidth
         case .peek: requested = max(expandedWidth * 0.94, cameraWidth + 80)
         case .notice:
@@ -267,6 +291,11 @@ struct SystemOSD: Equatable {
     }
 
     var surfaceTarget: NotchSurface {
+        if !hasHardwareNotch && presentation == .idle {
+            let width: CGFloat = idlePillPhase == .pill ? theme.number("layout.idlePillWidth", 64) : idlePillPhase == .dot ? 8 : 0.1
+            let height: CGFloat = idlePillPhase == .pill ? cameraHeight : idlePillPhase == .dot ? 8 : 0.1
+            return .init(width: max(0.1, width), height: height, offset: 0, radius: height/2, ear: 0, artworkSize: 1)
+        }
         var surface = baseSurfaceTarget
         surface.radius = max(0, min(200, theme.number("surface.radius", surface.radius)))
         surface.ear = max(0, min(40, theme.number("surface.earRadius", surface.ear)))
@@ -275,6 +304,7 @@ struct SystemOSD: Equatable {
         surface.artworkY = theme.number("layout.artworkY", surface.artworkY)
         surface.waveformInset = theme.number("layout.waveformInset", surface.waveformInset)
         surface.waveformY = theme.number("layout.waveformY", surface.waveformY)
+        if !hasHardwareNotch { surface.ear = 0; surface.radius = presentation == .expanded ? min(24, surface.height/2) : surface.height/2 }
         return surface
     }
     private var baseSurfaceTarget: NotchSurface {
@@ -359,6 +389,7 @@ struct SystemOSD: Equatable {
     }
     func stop() {
         unlockWork?.cancel()
+        idlePillWork?.cancel()
         media.stop(); mediaKeys.stop(); waveform.stop(); system.stop(); noticeTimer?.invalidate()
     }
 
@@ -402,6 +433,7 @@ struct SystemOSD: Equatable {
         guard pointerInside != inside else { return }
         pointerInside = inside
         collapseWork?.cancel()
+        if !hasHardwareNotch { updateIdlePill() }
     }
 
     func finishScrubbing() { scrubbing = false; if !pointerInside { hovering = false } }

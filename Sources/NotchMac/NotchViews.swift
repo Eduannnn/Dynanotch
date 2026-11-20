@@ -15,11 +15,13 @@ struct NotchSilhouette: Shape {
     var radius: CGFloat
     var ear: CGFloat = 7
     var closesTop = true
+    var floating = false
     var animatableData: AnimatablePair<CGFloat, CGFloat> {
         get { .init(radius, ear) }
         set { radius = newValue.first; ear = newValue.second }
     }
     func path(in rect: CGRect) -> Path {
+        if floating { return RoundedRectangle(cornerRadius: radius).path(in: rect) }
         let e = min(ear, rect.height / 2), r = min(radius, (rect.width - 2 * e) / 2, rect.height - e)
         let l = rect.minX + e, right = rect.maxX - e, bottom = rect.maxY
         var path = Path()
@@ -42,13 +44,14 @@ private struct NotchSurfaceBackground: View {
     var liquidGlass: Bool
     var cameraHeight: CGFloat
     var expandedHeight: CGFloat
+    var floating: Bool
     var lighting: EdgeLighting
     var staticPreview: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.notchTheme) private var theme
 
     var body: some View {
-        let shape = NotchSilhouette(radius: surface.radius, ear: surface.ear)
+        let shape = NotchSilhouette(radius: surface.radius, ear: surface.ear, floating: floating)
         let progress = liquidGlass && !reduceTransparency && NotchClearGlassView.isSupported
             ? unit((surface.height - cameraHeight - 3) / max(1, expandedHeight - cameraHeight - 3)) : 0
         ZStack(alignment: .top) {
@@ -75,9 +78,14 @@ private struct NotchSurfaceBackground: View {
         }
         .clipShape(shape)
         .overlay {
-            NotchGlassRim(radius: surface.radius, ear: surface.ear, highlight: lighting.point,
-                          strength: lighting.strength, staticPreview: staticPreview)
-                .opacity((liquidGlass ? theme.flag("glass.edgeHighlight", false) : theme.flag("surface.edgeHighlight", true)) ? 1 : 0)
+            if floating {
+                SpecularGlassRim(surface: RoundedRectangle(cornerRadius: surface.radius), edge: RoundedRectangle(cornerRadius: surface.radius),
+                                 highlight: lighting.point, strength: lighting.strength, staticPreview: staticPreview)
+            } else {
+                NotchGlassRim(radius: surface.radius, ear: surface.ear, highlight: lighting.point,
+                              strength: lighting.strength, staticPreview: staticPreview)
+                    .opacity((liquidGlass ? theme.flag("glass.edgeHighlight", false) : theme.flag("surface.edgeHighlight", true)) ? 1 : 0)
+            }
         }
     }
 }
@@ -215,7 +223,7 @@ struct NotchRootView: View {
                 NotchSurfaceBackground(surface: surface, liquidGlass: model.theme.flag("glass.enabled", model.preferences.liquidGlass),
                                        cameraHeight: model.cameraHeight,
                                        expandedHeight: model.cameraHeight + (model.media.snapshot?.isBrowserAudio == true ? 84 : 146) - 2,
-                                       lighting: model.edgeLighting, staticPreview: staticPreview)
+                                       floating: !model.hasHardwareNotch, lighting: model.edgeLighting, staticPreview: staticPreview)
                     .themed("surface")
                     .shadow(color: .black.opacity(expanded ? (model.theme.flag("glass.enabled", model.preferences.liquidGlass) ? model.theme.number("glass.shadowOpacity", 0) : model.theme.number("surface.shadowOpacity", 0.32)) : 0),
                             radius: model.theme.number("surface.shadowRadius", 15), x: model.theme.number("surface.shadowX", 0), y: model.theme.number("surface.shadowY", 6))
@@ -251,7 +259,7 @@ struct NotchRootView: View {
                     }
                 }
                 .padding(.horizontal, surface.ear)
-                .clipShape(NotchSilhouette(radius: surface.radius, ear: surface.ear))
+                .clipShape(NotchSilhouette(radius: surface.radius, ear: surface.ear, floating: !model.hasHardwareNotch))
 
             }
             .frame(width: surface.width + 2 * surface.ear, height: surface.height, alignment: .top)
@@ -273,14 +281,16 @@ struct NotchRootView: View {
 
             NotchThemeLayers(model: model)
                 .frame(width: surface.width, height: surface.height, alignment: .topLeading)
-                .clipShape(NotchSilhouette(radius: surface.radius, ear: surface.ear))
+                .clipShape(NotchSilhouette(radius: surface.radius, ear: surface.ear, floating: !model.hasHardwareNotch))
                 .offset(x: (Self.canvasWidth - surface.width) / 2 + surface.offset)
 
             // Keep foreground transition blur away from the camera throughout each morph.
-            NotchSilhouette(radius: 12, ear: 0)
-                .fill(.black).frame(width: model.cameraWidth, height: model.cameraHeight)
-                .offset(x: (Self.canvasWidth - model.cameraWidth) / 2)
-                .allowsHitTesting(false).accessibilityHidden(true)
+            if model.hasHardwareNotch {
+                NotchSilhouette(radius: 12, ear: 0)
+                    .fill(.black).frame(width: model.cameraWidth, height: model.cameraHeight)
+                    .offset(x: (Self.canvasWidth - model.cameraWidth) / 2)
+                    .allowsHitTesting(false).accessibilityHidden(true)
+            }
             if model.calibrating {
                 RoundedRectangle(cornerRadius: 7).stroke(Color.notchAccent, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
                     .frame(width: model.cameraWidth + 4, height: model.cameraHeight + 3)
@@ -290,6 +300,9 @@ struct NotchRootView: View {
         }
         .frame(width: Self.canvasWidth, height: Self.canvasHeight, alignment: .topLeading)
         .coordinateSpace(name: Self.canvasSpace)
+        .scaleEffect(model.notchScale, anchor: .top)
+        .opacity(!model.hasHardwareNotch && model.presentation == .idle && model.idlePillPhase == .hidden ? 0 : 1)
+        .animation(IslandMotion.fade, value: model.idlePillPhase)
         .foregroundStyle(.white)
         .font(.system(size: 13))
         .tint(model.accent)
@@ -297,11 +310,14 @@ struct NotchRootView: View {
         .preferredColorScheme(.dark)
         .environment(\.notchTheme, model.theme)
         .onAppear {
+            if model.idlePillPhase == .pill { model.updateIdlePill() }
             motion.response = model.theme.number("motion.response", 0.32)
             motion.damping = model.theme.number("motion.damping", 0.88)
             motion.onFrame = { model.present($0) }
             motion.update(model.surfaceTarget, screen: model.displayScreen, immediate: true)
         }
+        .notchOnChange(of: model.presentation) { _, _ in model.updateIdlePill() }
+        .notchOnChange(of: model.hasHardwareNotch) { _, _ in model.updateIdlePill() }
         .notchOnChange(of: model.surfaceTarget) { _, value in
             motion.response = max(0.05, model.theme.number("motion.response", 0.32))
             motion.damping = max(0.1, model.theme.number("motion.damping", 0.88))
@@ -338,7 +354,7 @@ struct NotchRootView: View {
                 .frame(height: model.cameraHeight)
                 .allowsHitTesting(false)
             } else {
-                Color.clear.frame(width: model.cameraWidth, height: model.collapsedHeight)
+                Color.clear.frame(width: model.hasHardwareNotch ? model.cameraWidth : model.surfaceTarget.width, height: model.collapsedHeight)
                     .contentShape(Rectangle()).onTapGesture { model.openSettings?() }
                     .accessibilityLabel("Dynanotch Settings")
             }

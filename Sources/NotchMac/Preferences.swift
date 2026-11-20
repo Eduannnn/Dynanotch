@@ -65,10 +65,10 @@ struct DisplayGeometry {
         let leftWidth = screen.auxiliaryTopLeftArea?.width
         let rightWidth = screen.auxiliaryTopRightArea?.width
         let detectedWidth = leftWidth.flatMap { left in rightWidth.map { screen.frame.width - left - $0 } } ?? 180
-        let width = preferences.manualGeometry ? min(400, max(100, preferences.cameraWidth)) : max(100, detectedWidth)
+        let width = screen.safeAreaInsets.top <= 0 ? 18 : preferences.manualGeometry ? min(400, max(100, preferences.cameraWidth)) : max(100, detectedWidth)
         let menuBarHeight = screen.frame.maxY - screen.visibleFrame.maxY
-        let automaticHeight = inferredNotchHeight(on: screen) ?? ((20...30).contains(menuBarHeight) ? menuBarHeight : 24)
-        let height = preferences.manualGeometry ? min(64, max(screen.safeAreaInsets.top, preferences.cameraHeight)) : automaticHeight
+        let automaticHeight = screen.safeAreaInsets.top <= 0 ? 28 : inferredNotchHeight(on: screen) ?? ((20...30).contains(menuBarHeight) ? menuBarHeight : 24)
+        let height = screen.safeAreaInsets.top <= 0 ? 28 : preferences.manualGeometry ? min(64, max(screen.safeAreaInsets.top, preferences.cameraHeight)) : automaticHeight
         let center = leftWidth.map { screen.frame.minX + $0 + detectedWidth / 2 } ?? screen.frame.midX
         let offset = preferences.manualGeometry ? min(240, max(-240, preferences.horizontalOffset)) : 0
         return .init(screen: screen, cameraWidth: width, cameraHeight: height, centerX: center + offset)

@@ -182,23 +182,26 @@ final class NotchPanel: NSPanel {
         }
         self.geometry = geometry
         model.displayScreen = geometry.screen
+        if model.hasHardwareNotch != geometry.hasHardwareNotch { model.hasHardwareNotch = geometry.hasHardwareNotch }
         model.cameraWidth = geometry.cameraWidth
         model.cameraHeight = geometry.cameraHeight
         model.availableWidth = geometry.screen.frame.width
         model.brightness.useDisplay(geometry.screen.displayID)
-        let frame = NSRect(x: geometry.centerX - NotchRootView.canvasWidth / 2, y: geometry.screen.frame.maxY - NotchRootView.canvasHeight, width: NotchRootView.canvasWidth, height: NotchRootView.canvasHeight)
+        let frame = NSRect(x: geometry.centerX - NotchRootView.canvasWidth / 2, y: geometry.screen.frame.maxY - NotchRootView.canvasHeight - model.notchTopInset, width: NotchRootView.canvasWidth, height: NotchRootView.canvasHeight)
         if panel.frame != frame { panel.setFrame(frame, display: true) }
     }
 
     private var bodyRect: NSRect {
         let surface = model.presentedSurface ?? model.surfaceTarget
-        return NSRect(x: panel.frame.midX - surface.width / 2 + surface.offset,
-                      y: panel.frame.maxY - surface.height, width: surface.width, height: surface.height)
+        return NSRect(x: panel.frame.midX + (-surface.width / 2 + surface.offset) * model.notchScale,
+                      y: panel.frame.maxY - surface.height * model.notchScale,
+                      width: surface.width * model.notchScale, height: surface.height * model.notchScale)
     }
     private func satelliteRect(_ satellite: NotchSatellite) -> NSRect? {
         guard let rect = model.presentedSatellites[satellite], !rect.isEmpty else { return nil }
-        return NSRect(x: panel.frame.minX + rect.minX, y: panel.frame.maxY - rect.maxY,
-                      width: rect.width, height: rect.height)
+        return NSRect(x: panel.frame.midX + (rect.minX - NotchRootView.canvasWidth/2) * model.notchScale,
+                      y: panel.frame.maxY - rect.maxY * model.notchScale,
+                      width: rect.width * model.notchScale, height: rect.height * model.notchScale)
     }
 
     private func isOverSatellite(_ satellite: NotchSatellite, point: NSPoint) -> Bool {
@@ -237,8 +240,8 @@ final class NotchPanel: NSPanel {
         if model.hidden || (model.showsLockLayout && model.media.snapshot == nil) { return false }
         guard geometry != nil else { return false }
         let surface = model.presentedSurface ?? model.surfaceTarget
-        let local = CGPoint(x: point.x-bodyRect.minX+surface.ear, y: bodyRect.maxY-point.y)
-        return NotchSilhouette(radius: surface.radius, ear: surface.ear)
+        let local = CGPoint(x: (point.x-bodyRect.minX)/model.notchScale+surface.ear, y: (bodyRect.maxY-point.y)/model.notchScale)
+        return NotchSilhouette(radius: surface.radius, ear: surface.ear, floating: !model.hasHardwareNotch)
             .path(in: CGRect(x: 0, y: 0, width: surface.width+2*surface.ear, height: surface.height)).contains(local)
     }
     var isPointerOverNotch: Bool {
@@ -249,6 +252,10 @@ final class NotchPanel: NSPanel {
     private func trackPointer() {
         guard !model.showsLockLayout || model.media.snapshot != nil else { panel.ignoresMouseEvents = true; return }
         let point = NSEvent.mouseLocation
+        if !model.hasHardwareNotch, model.presentation == .idle, model.idlePillPhase != .pill,
+           CGRect(x: panel.frame.midX-40, y: panel.frame.maxY-30, width: 80, height: 30).contains(point) {
+            model.updateIdlePill()
+        }
         let interactive = isInteractive(point)
         let body = bodyRect
         let lighting = model.hidden ? EdgeLighting() : EdgeLighting.response(to: point, around: body)

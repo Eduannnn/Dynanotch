@@ -4,6 +4,46 @@ import NotchCore
 
 /// Runs the real models and renderer with isolated preferences and no device/media side effects.
 @MainActor enum AppVerification {
+    static func runNotchless(directory: String) {
+        let output = URL(fileURLWithPath: directory, isDirectory: true)
+        let store = NotchThemeStore(folder: output.appendingPathComponent(UUID().uuidString), watch: false)
+        let file = store.folder.appendingPathComponent("notchless.json")
+        try? JSONSerialization.data(withJSONObject: ["layout": ["idlePillSeconds": 0.2, "idleDotSeconds": 0.2]]).write(to: file)
+        store.reload()
+        let defaults = UserDefaults(suiteName: "DynanotchNotchlessTest." + UUID().uuidString)!
+        let model = NotchModel(preferences: Preferences(defaults: defaults), themes: store)
+        model.media.stop(); model.hasHardwareNotch = false; model.cameraWidth = 18; model.cameraHeight = 28
+        model.availableWidth = 1280
+        model.updateIdlePill()
+        render(model, output.appendingPathComponent("idle-pill.png"))
+        var checks = ["startsAsPill": model.surfaceTarget.width == 64,
+                      "smallerUI": model.notchScale == 0.85,
+                      "floatingOutline": model.surfaceTarget.ear == 0]
+        DispatchQueue.main.asyncAfter(deadline: .now()+0.3) {
+            checks["shrinksToDot"] = model.idlePillPhase == .dot && model.surfaceTarget.width == 8
+            render(model, output.appendingPathComponent("idle-dot.png"))
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now()+0.6) {
+            checks["eventuallyHides"] = model.idlePillPhase == .hidden
+            model.media.setPreview(true); model.updateIdlePill()
+            checks["activityRestoresPill"] = model.presentation == .collapsed && model.idlePillPhase == .pill
+            render(model, output.appendingPathComponent("compact-player.png"))
+            model.toggleExpansion()
+            checks["playerOpens"] = model.presentation == .expanded && model.surfaceTarget.ear == 0
+            render(model, output.appendingPathComponent("expanded-player.png"), width: 800)
+            model.previewCharging(); model.previewNotice()
+            render(model, output.appendingPathComponent("simultaneous-activities.png"), width: 800)
+            model.media.setPreview(false)
+            model.stop()
+            var report: [String: Any] = checks
+            report["result"] = checks.values.allSatisfy { $0 } ? "pass" : "fail"
+            if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted]) {
+                try? data.write(to: output.appendingPathComponent("result.json"))
+            }
+            NSApp.terminate(nil)
+        }
+    }
+
     static func runThemes(directory: String) {
         let output = URL(fileURLWithPath: directory, isDirectory: true)
         let folder = output.appendingPathComponent(UUID().uuidString, isDirectory: true)

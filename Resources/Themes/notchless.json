@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "description": "Applied only on displays without a hardware notch.",
+  "layout": {
+    "notchlessScale": 0.85,
+    "notchlessTopInset": 6,
+    "idlePillWidth": 64,
+    "idlePillSeconds": 5,
+    "idleDotSeconds": 2
+  }
+}
