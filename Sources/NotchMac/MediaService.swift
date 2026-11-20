@@ -68,10 +68,14 @@ struct MediaSnapshot {
 
 @MainActor final class MediaService: ObservableObject {
     @Published private(set) var snapshot: MediaSnapshot?
+    private(set) var artworkFlipsBackward = false
+    private var previousTrackRequest: (bundleID: String, identity: TrackIdentity, deadline: TimeInterval)?
     @Published private(set) var deniedApps: Set<String> = []
     @Published private(set) var message = ""
     @Published private(set) var favoriteChanging = false
     private var timer: Timer?
+    private var pausedSince: [String: TimeInterval] = [:]
+    private static let pausedVisibilityDuration: TimeInterval = 10 * 60
     private var polling = false
     private var refreshRequested = false
     private var pendingPlaybackCommand: UUID?
@@ -113,6 +117,31 @@ struct MediaSnapshot {
     }
 
     func retryPermissions() { deniedApps = []; message = ""; poll() }
+
+    private func publishPlayback(_ item: MediaSnapshot?) {
+        var visible = item
+        if let item, !item.isPreview {
+            if item.isPlaying {
+                pausedSince.removeValue(forKey: item.bundleID)
+            } else {
+                let now = ProcessInfo.processInfo.systemUptime
+                let since = pausedSince[item.bundleID] ?? now
+                pausedSince[item.bundleID] = since
+                if now - since >= Self.pausedVisibilityDuration { visible = nil }
+            }
+        }
+        if let visible, snapshot?.identity.isSameTrack(as: visible.identity) != true {
+            let request = previousTrackRequest
+            artworkFlipsBackward = request.map {
+                $0.bundleID == visible.bundleID && !$0.identity.isSameTrack(as: visible.identity)
+                    && ProcessInfo.processInfo.systemUptime <= $0.deadline
+            } ?? false
+            if artworkFlipsBackward || request?.bundleID != visible.bundleID {
+                previousTrackRequest = nil
+            }
+        }
+        if snapshot != nil || visible != nil { snapshot = visible }
+    }
 
     private func poll() {
         guard !polling, pendingPlaybackCommand == nil, !preview, !stopped else { return }
@@ -166,9 +195,9 @@ struct MediaSnapshot {
                         read.artwork = artwork; read.tint = current.tint; read.secondaryTint = current.secondaryTint
                         resolved = read
                     }
-                    if resolved?.isPlaying == true { self.snapshot = resolved }
-                    else if let browser { self.snapshot = browser.snapshot(reusing: self.snapshot) }
-                    else if self.snapshot != nil || resolved != nil { self.snapshot = resolved }
+                    if resolved?.isPlaying == true { self.publishPlayback(resolved) }
+                    else if let browser { self.publishPlayback(browser.snapshot(reusing: self.snapshot)) }
+                    else { self.publishPlayback(resolved) }
                     self.loadArtworkIfNeeded()
                     if self.refreshRequested { self.poll() }
                 }
@@ -228,6 +257,11 @@ struct MediaSnapshot {
 
     func command(_ action: String) {
         guard var item = snapshot, item.canControl else { return }
+        if action == "previous track" {
+            previousTrackRequest = (item.bundleID, item.identity, ProcessInfo.processInfo.systemUptime + 5)
+        } else if action == "next track" {
+            previousTrackRequest = nil
+        }
         if item.isPreview {
             item.position = item.currentPosition; item.receivedAt = Date()
             if action == "playpause" { item.isPlaying.toggle() }
@@ -238,7 +272,7 @@ struct MediaSnapshot {
                 item.identity.title = ["Midnight on repeat", "A little after midnight", "Neon afterglow"][previewTrack]
                 item.artwork = Self.previewArtwork(variant: previewTrack)
             }
-            snapshot = item
+            publishPlayback(item)
             return
         }
         guard ["playpause", "next track", "previous track"].contains(action) else { return }
@@ -246,7 +280,7 @@ struct MediaSnapshot {
             let request = UUID()
             pendingPlaybackCommand = request
             item.position = item.currentPosition; item.receivedAt = Date(); item.isPlaying.toggle()
-            snapshot = item
+            publishPlayback(item)
             // Send the requested state so a delayed command cannot toggle a
             // state that has already changed in the player.
             let target = item.isPlaying ? "play" : "pause"

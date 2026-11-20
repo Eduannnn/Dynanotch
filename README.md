@@ -1,6 +1,6 @@
 # Dynanotch
 
-**Version 1.1.5 · Tested on macOS 27.3 beta**
+**Version 1.2.0 · Tested on macOS 27.3 beta**
 
 A SwiftUI and AppKit app that turns the MacBook camera notch into an interactive spot for media, device battery information, and system controls. Dynanotch draws its own interface. It runs without patches to macOS or changes to SIP.
 
@@ -12,15 +12,24 @@ Dynanotch brings a bit of the newer MacBooks’ Dynamic Island to your notch. On
 
 Download the precompiled Apple Silicon ZIP from the [latest release](https://github.com/Eduannnn/Dynanotch/releases/latest). The app is ad hoc signed and unnotarized. The ZIP includes a README with commands for signing your copy using your own Apple Development certificate. You can also build and sign it from source below.
 
+### Universal 2 and themes
+
+The v1.2.0 download includes **arm64 and x86_64 in one app**. Choose the Universal 2 ZIP for Apple Silicon or Intel. The precompiled app is ad-hoc signed; local signing instructions are included in the ZIP.
+
+JSON themes live in `~/Library/Application Support/Dynanotch/Themes`. Open them through **Settings → JSON themes → Open theme files**. `global.json` supplies shared defaults; collapsed, expanded, notice, AirPods, charging, OSD, browser, locked, and unlocking files override individual states. `REFERENCE.json` explains the element, layout, typography, glass, symbol, waveform, and animation controls. Changes reload automatically; malformed files retain the last working theme. Default templates are in `Resources/Themes`.
+
+The player opens on click. Hovering produces a small swell. Optional expanded Liquid Glass uses native compositor refraction and a black camera fade; the collapsed notch stays black. The refraction renderer uses private macOS APIs, so its availability can change between macOS releases.
+
 ### macOS compatibility
 
 | Version | Status |
 | --- | --- |
 | **macOS 27.3 beta (26C5035r)** | **Supported and tested** on an M2 MacBook Air. All 20 sampled AirPods artwork cases decoded, and the native skip animations loaded and played. |
 | macOS 27.2 | Unverified. AirPods movies and native skip animations need to be checked on that build before claiming support. |
-| Other macOS versions | Not verified for this release. The deployment target is macOS 14.4; Liquid Glass requires macOS 26 or later. |
+| macOS 13 Ventura–15 Sequoia | Experimental. Universal 2 binaries target macOS 13.0; runtime testing on these versions is still needed. Older systems use compatible animation and black-surface fallbacks. |
+| macOS 26 and newer | Liquid Glass can be enabled where supported. Full hardware testing beyond the listed tested system is still needed. |
 
-The app reads optional artwork and animations from the installed macOS. Missing resources fall back to SF Symbols.
+The app reads optional artwork and animations from the installed macOS. Missing resources fall back to SF Symbols. AirPods movies and native skip resources are not bundled in this public download. Live audio waveform capture requires macOS 14.4 or newer; it is unavailable on Ventura. Ventura uses a timer only while a surface transition is active, and simpler symbol/favourite animations.
 
 ## Now playing
 

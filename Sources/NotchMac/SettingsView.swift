@@ -78,16 +78,28 @@ struct SettingsView: View {
                 Toggle("Hide menu-bar icon", isOn: $preferences.hideMenuBarIcon)
                 Text("Hover over the notch and press ⌘, to open Settings. Accessibility access is needed when another app is active. Reopening Dynanotch from Applications also opens Settings when the menu icon is hidden.")
                     .font(.caption).foregroundStyle(.secondary)
-                Toggle("Expand player on hover", isOn: $preferences.expandOnHover)
                 Toggle("Show notch on the lock screen", isOn: $preferences.showOnLockScreen)
+                if #available(macOS 26.0, *) {
+                    Toggle("Liquid Glass notch", isOn: $preferences.liquidGlass)
+                        .help("Use the native clear glass appearance instead of black.")
+                }
                 Toggle("Use colors from album artwork", isOn: $preferences.artworkTint)
                 Toggle("Device and battery notices", isOn: $preferences.showNotices)
                 Toggle("Volume and brightness overlay", isOn: $preferences.showOSD)
-                Toggle("Launch at login", isOn: $launchAtLogin).onChange(of: launchAtLogin) { _, value in
+                Toggle("Launch at login", isOn: $launchAtLogin).notchOnChange(of: launchAtLogin) { _, value in
                     do { if value { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }; loginError = "" }
                     catch { loginError = "Move the app to Applications, then try again. \(error.localizedDescription)"; launchAtLogin = SMAppService.mainApp.status == .enabled }
                 }
                 if !loginError.isEmpty { Text(loginError).font(.caption).foregroundStyle(.orange) }
+            }
+            Section("JSON themes") {
+                HStack {
+                    Button("Open theme files") { model.themes.openFolder() }
+                    Button("Reload themes") { model.themes.reload() }
+                }
+                Text("Edit global.json or a state file. Saved changes apply automatically; invalid edits keep the last working theme.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if !model.themes.error.isEmpty { Text(model.themes.error).font(.caption).foregroundStyle(.red) }
             }
             Section("Try it") {
                 Toggle("Preview player", isOn: Binding(get: { model.previewMode }, set: { model.setPreview($0) }))
@@ -95,7 +107,7 @@ struct SettingsView: View {
                     Button("Charging notice", systemImage: "bolt.fill") { model.previewCharging() }
                     Spacer()
                 }
-                Text("Hover over music to expand it. Use the menu-bar icon or ⌘, over the notch to open Settings.").font(.caption).foregroundStyle(.secondary)
+                Text("Click music to expand it. Use the menu-bar icon or ⌘, over the notch to open Settings.").font(.caption).foregroundStyle(.secondary)
             }
             Section("AirPods connection previews") {
                 Picker("Device", selection: $previewDevice) {

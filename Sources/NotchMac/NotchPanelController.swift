@@ -68,9 +68,9 @@ final class NotchPanel: NSPanel {
             }
         }
         outsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            guard let self, !self.model.screenLocked else { return }
+            guard let self else { return }
             let point = NSEvent.mouseLocation
-            if !self.isOverAirPodsSatellite(point) { self.model.closeAirPodsDetails() }
+            if !self.isOverAirPodsDetails(point) { self.model.closeAirPodsDetails() }
             if !self.isInteractive(point) { self.model.close() }
         }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
@@ -89,7 +89,7 @@ final class NotchPanel: NSPanel {
             self?.trackPointer()
         }
         localPointerMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .leftMouseDown]) { [weak self] event in
-            if let self, event.type == .leftMouseDown, !self.isOverAirPodsSatellite(NSEvent.mouseLocation) {
+            if let self, event.type == .leftMouseDown, !self.isOverAirPodsDetails(NSEvent.mouseLocation) {
                 self.model.closeAirPodsDetails()
             }
             self?.trackPointer()
@@ -128,7 +128,8 @@ final class NotchPanel: NSPanel {
                 model.edgeLighting = EdgeLighting()
                 model.bubbleLighting = EdgeLighting()
             }
-            model.screenLocked = locked
+            model.updateScreenLock(locked, animateUnlock: model.preferences.showOnLockScreen
+                && !model.hidden && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
             model.mediaKeys.suspendForLockScreen(locked)
         }
         if locked && unlockWatchdog == nil {
@@ -146,7 +147,7 @@ final class NotchPanel: NSPanel {
             unlockWatchdog = nil
         }
         applyWindowState()
-        if !locked { trackPointer() }
+        trackPointer()
     }
 
     private func applyWindowState(hidden: Bool? = nil) {
@@ -201,7 +202,7 @@ final class NotchPanel: NSPanel {
     }
 
     private func isOverSatellite(_ satellite: NotchSatellite, point: NSPoint) -> Bool {
-        guard !model.hidden, !model.screenLocked, !isBodyInteractive(point),
+        guard !model.hidden, !model.showsLockLayout, !isBodyInteractive(point),
               let rect = satelliteRect(satellite) else { return false }
         // During a merge the satellite is drawn beneath the camera and main island.
         if hardwareObstruction?.contains(point) == true { return false }
@@ -214,8 +215,13 @@ final class NotchPanel: NSPanel {
         model.leadingAirPods != nil && isOverSatellite(.airPods, point: point)
     }
 
+    private func isOverAirPodsDetails(_ point: NSPoint) -> Bool {
+        isOverAirPodsSatellite(point) || (model.inlineAirPods != nil && isBodyInteractive(point))
+    }
+
     private func isInteractive(_ point: NSPoint) -> Bool {
-        if model.hidden || model.screenLocked { return false }
+        if model.hidden { return false }
+        if model.showsLockLayout { return model.media.snapshot != nil && isBodyInteractive(point) }
         return isBodyInteractive(point) || isOverAirPodsSatellite(point)
             || (model.showsMediaBubble && isOverSatellite(.music, point: point))
     }
@@ -228,21 +234,20 @@ final class NotchPanel: NSPanel {
     }
 
     private func isBodyInteractive(_ point: NSPoint) -> Bool {
-        if model.hidden || model.screenLocked { return false }
-        guard geometry != nil, hardwareObstruction?.contains(point) != true else { return false }
+        if model.hidden || (model.showsLockLayout && model.media.snapshot == nil) { return false }
+        guard geometry != nil else { return false }
         let surface = model.presentedSurface ?? model.surfaceTarget
         let local = CGPoint(x: point.x-bodyRect.minX+surface.ear, y: bodyRect.maxY-point.y)
         return NotchSilhouette(radius: surface.radius, ear: surface.ear)
             .path(in: CGRect(x: 0, y: 0, width: surface.width+2*surface.ear, height: surface.height)).contains(local)
     }
     var isPointerOverNotch: Bool {
-        guard !model.hidden, !model.screenLocked else { return false }
-        // Keyboard shortcuts also work over the physical camera obstruction,
-        // which deliberately remains excluded from mouse hit testing.
+        guard !model.hidden, !model.showsLockLayout else { return false }
+        // The camera area belongs to the notch's click target as well.
         return bodyRect.contains(NSEvent.mouseLocation) || isInteractive(NSEvent.mouseLocation)
     }
     private func trackPointer() {
-        guard !model.screenLocked else { panel.ignoresMouseEvents = true; return }
+        guard !model.showsLockLayout || model.media.snapshot != nil else { panel.ignoresMouseEvents = true; return }
         let point = NSEvent.mouseLocation
         let interactive = isInteractive(point)
         let body = bodyRect
@@ -287,3 +292,4 @@ final class NotchPanel: NSPanel {
         overlaySpace?.detach()
     }
 }
+

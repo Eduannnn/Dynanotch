@@ -108,7 +108,7 @@ private final class SpectrumMeter: @unchecked Sendable {
         if aggregate != 0, let ioProc { AudioDeviceStop(aggregate, ioProc); AudioDeviceDestroyIOProcID(aggregate, ioProc) }
         ioProc = nil
         if aggregate != 0 { AudioHardwareDestroyAggregateDevice(aggregate); aggregate = 0 }
-        if tap != 0 { AudioHardwareDestroyProcessTap(tap); tap = 0 }
+        if #available(macOS 14.4, *), tap != 0 { AudioHardwareDestroyProcessTap(tap); tap = 0 }
         active = false; levels = [0, 0, 0, 0, 0, 0]
     }
     var diagnostics: [String: Any] {

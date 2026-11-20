@@ -20,9 +20,12 @@ struct NotchSurface: Equatable {
 @MainActor final class NotchAnimationCoordinator: NSObject, ObservableObject {
     @Published private(set) var surface = NotchSurface(width: 208, height: 37.5, offset: 0, radius: 12, ear: 6)
     private var values: [MotionValue] = []
-    private var link: CADisplayLink?
+    private var link: AnyObject?
+    private var invalidateLink: (() -> Void)?
     private var lastTime = CACurrentMediaTime()
     private var target = NotchSurface(width: 208, height: 37.5, offset: 0, radius: 12, ear: 6)
+    var response = 0.32
+    var damping = 0.88
     var onFrame: ((NotchSurface) -> Void)?
     private(set) var frameCount = 0
     var isAnimating: Bool { link != nil }
@@ -46,11 +49,18 @@ struct NotchSurface: Equatable {
         if values.allSatisfy(\.settled) { publish(); return }
         if link == nil, let screen = screen ?? NSScreen.main {
             lastTime = now
-            link = screen.displayLink(target: self, selector: #selector(tick(_:)))
-            link?.add(to: .main, forMode: .common)
+            if #available(macOS 14.0, *) {
+                let displayLink = screen.displayLink(target: self, selector: #selector(tick(_:)))
+                link = displayLink; invalidateLink = { displayLink.invalidate() }
+                displayLink.add(to: .main, forMode: .common)
+            } else {
+                let timer = Timer(timeInterval: 1.0/60, repeats: true) { [weak self] timer in self?.tick(timer) }
+                link = timer; invalidateLink = { timer.invalidate() }
+                RunLoop.main.add(timer, forMode: .common)
+            }
         }
     }
-    @objc private func tick(_ sender: CADisplayLink) {
+    @objc private func tick(_ sender: AnyObject) {
         frameCount += 1
         advance(to: CACurrentMediaTime())
         if values.allSatisfy(\.settled) {
@@ -61,7 +71,7 @@ struct NotchSurface: Equatable {
     }
     private func advance(to now: Double) {
         let dt = max(0, now-lastTime); lastTime = now
-        for i in values.indices { values[i].advance(seconds: dt) }
+        for i in values.indices { values[i].advance(seconds: dt, response: max(0.05, response), damping: damping) }
     }
     private func publish() {
         guard values.count == 10 else { return }
@@ -71,5 +81,5 @@ struct NotchSurface: Equatable {
                         waveformInset: values[8].value, waveformY: values[9].value)
         onFrame?(surface)
     }
-    func stop() { link?.invalidate(); link = nil }
+    func stop() { invalidateLink?(); invalidateLink = nil; link = nil }
 }

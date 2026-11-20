@@ -1,0 +1,4 @@
+{
+  "version": 1,
+  "description": "Overrides global.json for brightness. Omit fields to inherit; null restores built-in values."
+}

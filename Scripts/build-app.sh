@@ -3,6 +3,19 @@ set -euo pipefail
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
 build_dir="${NOTCH_BUILD_DIR:-$project_root/.build}"
 app_path="${1:-$project_root/Build/Dynanotch.app}"
+local_assets="${DYNANOTCH_BUNDLE_SYSTEM_ASSETS:-0}"
+asset_path="$app_path/Contents/Resources/BundledAnimations"
+architecture_flags=(--arch arm64 --arch x86_64)
+if [[ "$local_assets" == 1 ]]; then
+    if [[ $# -eq 0 || -e "$app_path" ]]; then
+        echo "Use a new, explicit .app output path for the local universal build with bundled assets." >&2
+        exit 1
+    fi
+    architecture_flags=(--arch arm64 --arch x86_64)
+elif [[ -e "$asset_path" ]]; then
+    echo "Choose another output path. This app bundle contains locally copied system assets." >&2
+    exit 1
+fi
 signing_identity="${DYNANOTCH_SIGNING_IDENTITY:-}"
 if [[ -z "$signing_identity" && -r "$project_root/.signing-identity" ]]; then
     signing_identity="$(<"$project_root/.signing-identity")"
@@ -24,13 +37,32 @@ if ! /usr/bin/security find-identity -v -p codesigning | /usr/bin/awk -v wanted=
     echo "The selected signing identity is not currently valid. Signing stopped; ad-hoc fallback is disabled." >&2
     exit 1
 fi
-xcrun swift build --package-path "$project_root" --scratch-path "$build_dir" --configuration release
-bin_dir="$(xcrun swift build --package-path "$project_root" --scratch-path "$build_dir" --configuration release --show-bin-path)"
+sdk_version="$(xcrun --show-sdk-version)"
+linker_flags=(-Xlinker -platform_version -Xlinker macos -Xlinker 13.0 -Xlinker "$sdk_version")
+xcrun swift build --package-path "$project_root" --scratch-path "$build_dir" --configuration release "${architecture_flags[@]}" "${linker_flags[@]}"
+bin_dir="$(xcrun swift build --package-path "$project_root" --scratch-path "$build_dir" --configuration release "${architecture_flags[@]}" --show-bin-path)"
 mkdir -p "$app_path/Contents/MacOS" "$app_path/Contents/Resources"
 cp "$bin_dir/Dynanotch" "$app_path/Contents/MacOS/Dynanotch"
 cp "$project_root/Resources/Info.plist" "$app_path/Contents/Info.plist"
+if [[ -d "$project_root/Resources/Themes" ]]; then
+    /usr/bin/ditto "$project_root/Resources/Themes" "$app_path/Contents/Resources/Themes"
+fi
 if [[ -f "$project_root/Resources/AppIcon.icns" ]]; then
     cp "$project_root/Resources/AppIcon.icns" "$app_path/Contents/Resources/AppIcon.icns"
+fi
+if [[ "$local_assets" == 1 ]]; then
+    pairing_root="/System/Library/CoreServices/BluetoothUIService.app/Contents/Resources"
+    skip_archive="/System/Library/PrivateFrameworks/NowPlayingUI.framework/Resources/ForwardBackward.caar"
+    mkdir -p "$asset_path"
+    # Include color variants for the AirPods models recognized by Dynanotch.
+    for product_id in 8194 8202 8206 8207 8211 8212 8217 8223 8228 8229 8230 8231 8237 8240 8242 8246 8247; do
+        banner="Banner-PID-${product_id}-mov"
+        for movie in "$pairing_root/$banner/"*.mov(N); do
+            mkdir -p "$asset_path/$banner"
+            /bin/cat "$movie" > "$asset_path/$banner/${movie:t}"
+        done
+    done
+    /bin/cat "$skip_archive" > "$asset_path/ForwardBackward.caar"
 fi
 /usr/bin/codesign --force --sign "$signing_identity" --options runtime \
     --entitlements "$project_root/Resources/Dynanotch.entitlements" \

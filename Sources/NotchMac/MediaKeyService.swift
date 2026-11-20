@@ -107,6 +107,14 @@ import NotchCore
             }
             return Unmanaged.passUnretained(event)
         }
+        // Observe transport keys without consuming them or sending a second playback command.
+        if type.rawValue == 14, let keyEvent = NSEvent(cgEvent: event), keyEvent.subtype.rawValue == 8 {
+            let code = (keyEvent.data1 >> 16) & 0xffff
+            let phase = (keyEvent.data1 >> 8) & 0xff
+            if phase == 0x0a && [16, 17, 18, 19, 20].contains(code) {
+                NotificationCenter.default.post(name: Notification.Name("DynanotchHardwareTransport"), object: code)
+            }
+        }
         guard requested, type.rawValue == 14, let cocoa = NSEvent(cgEvent: event),
               let stroke = HardwareMediaKeyStroke.decode(subtype: cocoa.subtype.rawValue, data1: cocoa.data1) else { return Unmanaged.passUnretained(event) }
         let flags = cocoa.modifierFlags

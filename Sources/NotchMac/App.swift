@@ -31,6 +31,9 @@ import UserNotifications
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let args = ProcessInfo.processInfo.arguments
+        if let index = args.firstIndex(of: "--verify-themes"), args.indices.contains(index + 1) {
+            verificationOnly = true; AppVerification.runThemes(directory: args[index + 1]); return
+        }
         if let index = args.firstIndex(of: "--verify-native-skips"), args.indices.contains(index + 1) {
             verificationOnly = true; AppVerification.runNativeSkips(directory: args[index + 1]); return
         }
@@ -47,6 +50,9 @@ import UserNotifications
         }
         if let index = args.firstIndex(of: "--verify-visuals"), args.indices.contains(index + 1) {
             verificationOnly = true; AppVerification.runVisual(directory: args[index + 1]); return
+        }
+        if let index = args.firstIndex(of: "--verify-stress"), args.indices.contains(index + 1) {
+            verificationOnly = true; AppVerification.runStress(directory: args[index + 1]); return
         }
         if let index = args.firstIndex(of: "--verify-app"), args.indices.contains(index + 1) {
             verificationOnly = true
@@ -190,7 +196,7 @@ import UserNotifications
             self?.model.previewNotice()
         }
     }
-    @objc private func previewPower() { model.previewCharging() }
+    @objc private func previewPower() { model.previewCharging(battery: model.system.state.battery) }
     @objc private func toggleHidden() { model.hidden.toggle() }
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func hideMenuIcon() { model.preferences.hideMenuBarIcon = true }

@@ -37,6 +37,51 @@ struct NotchSilhouette: Shape {
     }
 }
 
+private struct NotchSurfaceBackground: View {
+    var surface: NotchSurface
+    var liquidGlass: Bool
+    var cameraHeight: CGFloat
+    var expandedHeight: CGFloat
+    var lighting: EdgeLighting
+    var staticPreview: Bool
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.notchTheme) private var theme
+
+    var body: some View {
+        let shape = NotchSilhouette(radius: surface.radius, ear: surface.ear)
+        let progress = liquidGlass && !reduceTransparency && NotchClearGlassView.isSupported
+            ? unit((surface.height - cameraHeight - 3) / max(1, expandedHeight - cameraHeight - 3)) : 0
+        ZStack(alignment: .top) {
+            shape.fill(theme.color("surface.backgroundColor", .notchSurface)).opacity(1 - progress)
+            if liquidGlass && !reduceTransparency && NotchClearGlassView.isSupported {
+                NotchClearGlassBackdrop(refraction: max(0, min(100, theme.number("glass.refraction", 30))),
+                    lensHeight: max(1, min(100, theme.number("glass.lensHeight", 44))), blur: max(0, min(30, theme.number("glass.blur", 0))),
+                    dispersion: max(0, min(15, theme.number("glass.dispersion", 1.8))), topRadius: surface.ear, bottomRadius: surface.radius)
+                    // Sample beyond the visible edge; trim the filtered surface afterward.
+                    .padding(-1)
+                    .clipShape(shape)
+                    .opacity(progress)
+                // Dimming beneath clear-glass controls, tuned to 25%.
+                shape.fill(.black).opacity(min(1, max(0, theme.number("glass.dimming", 0.25))) * progress)
+                LinearGradient(stops: [
+                    .init(color: .black.opacity(max(0, min(1, theme.number("glass.topOpacity", 1)))), location: 0),
+                    .init(color: .black.opacity(max(0, min(1, theme.number("glass.topOpacity", 1)))), location: 0.28),
+                    .init(color: .black.opacity(0.75), location: 0.48),
+                    .init(color: .black.opacity(0.2), location: 0.8),
+                    .init(color: .clear, location: 1)
+                ], startPoint: .top, endPoint: .bottom)
+                .frame(height: min(surface.height, cameraHeight + max(0, theme.number("glass.fadeHeight", 90))))
+            }
+        }
+        .clipShape(shape)
+        .overlay {
+            NotchGlassRim(radius: surface.radius, ear: surface.ear, highlight: lighting.point,
+                          strength: lighting.strength, staticPreview: staticPreview)
+                .opacity((liquidGlass ? theme.flag("glass.edgeHighlight", false) : theme.flag("surface.edgeHighlight", true)) ? 1 : 0)
+        }
+    }
+}
+
 struct NotchRootView: View {
     @ObservedObject var model: NotchModel
     @StateObject private var motion = NotchAnimationCoordinator()
@@ -51,31 +96,27 @@ struct NotchRootView: View {
         let playing = model.media.snapshot?.isPlaying == true
         let expanded = model.presentation == .expanded
         let compactVolume = model.compactVolume
+        let expandedVolume = expanded && model.preservesMediaArtwork ? model.osd : nil
         let waveformVisible = compactVolume == nil && model.media.snapshot != nil
             && [.collapsed, .peek, .expanded].contains(model.presentation)
         let mediaVisible = model.media.snapshot != nil && ([.collapsed, .peek, .expanded].contains(model.presentation)
             || model.preservesMediaArtwork || model.showsMediaBubble)
         let left = (Self.canvasWidth - surface.width) / 2 + surface.offset
         let right = left + surface.width
-        let satelliteY = max(0, (model.collapsedHeight - NotchModel.volumePillHeight) / 2)
+        let satelliteY = max(0, (model.collapsedHeight - model.bubbleSize) / 2)
         ZStack(alignment: .topLeading) {
             BubbleSatellite(model: model, kind: .charge, item: model.trailingCharge ?? model.lockScreenNotice,
-                            lane: .init(edge: right, y: satelliteY, width: NotchModel.chargePillWidth, side: .trailing)) { notice in
-                Capsule().fill(Color.notchSurface)
+                            lane: .init(edge: right, y: satelliteY, width: model.bubbleSize, side: .trailing)) { notice in
+                Capsule().fill(model.theme.element("bubble.charging").color("backgroundColor", .notchSurface))
                     .overlay {
                         if notice.kind == .charging {
-                            ChargingBatteryGlyph(level: notice.battery)
+                            ChargingBatteryGlyph(level: notice.battery, size: 14)
                                 .id(notice.id)
-                                .offset(x: 1, y: 0.5)
+                                .offset(x: -0.5, y: 0)
                         } else {
                             let tint: Color = notice.kind == .batteryCritical ? .red : notice.kind == .batteryLow ? .orange : .white
-                            HStack(spacing: 5) {
-                                Image(systemName: notice.kind.symbol)
-                                if let battery = notice.battery {
-                                    Text("\(Int(battery * 100))%").monospacedDigit()
-                                }
-                            }
-                            .font(.system(size: 12, weight: .semibold))
+                            Image(systemName: notice.kind.symbol)
+                                .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(tint.opacity(notice.connected ? 1 : 0.6))
                         }
                     }
@@ -84,28 +125,19 @@ struct NotchRootView: View {
                                          highlight: model.chargePillLighting.point,
                                          strength: model.chargePillLighting.strength, staticPreview: staticPreview)
                     }
-                    .frame(width: NotchModel.chargePillWidth, height: NotchModel.volumePillHeight)
+                    .frame(width: model.bubbleSize, height: model.bubbleSize)
+                    .themed("bubble.charging")
                     .accessibilityLabel(notice.kind == .charging ? "Charging" : notice.name)
                     .accessibilityValue(notice.battery.map { "\(Int($0 * 100)) percent" } ?? "")
             }
             .allowsHitTesting(false)
 
             BubbleSatellite(model: model, kind: .volume, item: model.trailingVolume,
-                            lane: .init(edge: right, y: satelliteY, width: NotchModel.volumePillWidth,
+                            lane: .init(edge: right, y: satelliteY, width: model.bubbleSize,
                                         side: .trailing, occupiedWidth: model.volumePillExtraOffset)) { volume in
-                Capsule().fill(Color.notchSurface)
+                Capsule().fill(model.theme.element("bubble.volume").color("backgroundColor", .notchSurface))
                     .overlay {
-                        Capsule().fill(.white.opacity(0.2)).frame(width: 55, height: 6)
-                            .overlay(alignment: .leading) {
-                                Capsule().fill(.white)
-                                    .frame(width: volume.muted ? 0 : 55 * unit(volume.level), height: 6)
-                            }
-                            .overlay {
-                                if volume.muted {
-                                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
-                                        .foregroundStyle(.white)
-                                }
-                            }
+                        NotchVolumeBar(osd: volume, showsMuteMark: true, width: model.bubbleSize - 12)
                             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: volume)
                     }
                     .overlay {
@@ -113,18 +145,19 @@ struct NotchRootView: View {
                                          highlight: model.volumePillLighting.point,
                                          strength: model.volumePillLighting.strength, staticPreview: staticPreview)
                     }
-                    .frame(width: NotchModel.volumePillWidth, height: NotchModel.volumePillHeight)
+                    .frame(width: model.bubbleSize, height: model.bubbleSize)
+                    .themed("bubble.volume")
                     .accessibilityLabel("Volume")
                     .accessibilityValue(volume.label)
             }
             .allowsHitTesting(false)
 
             BubbleSatellite(model: model, kind: .airPods, item: model.leadingAirPods,
-                            lane: .init(edge: left, y: satelliteY, width: NotchModel.airPodsPillSize,
-                                        side: .leading, occupiedWidth: model.airPodsPillOffset - 42)) { notice in
+                            lane: .init(edge: left, y: satelliteY, width: model.bubbleSize,
+                                        side: .leading, occupiedWidth: model.airPodsPillOffset - (model.bubbleSize + model.bubbleGap))) { notice in
                 if let artwork = notice.airPodsArtwork {
                     AirPodsBatterySatellite(notice: notice, model: model, system: model.system) {
-                        Circle().fill(Color.notchSurface)
+                        Circle().fill(model.theme.element("bubble.airpods").color("backgroundColor", .notchSurface))
                             .overlay {
                                 Circle().stroke(.gray.opacity(notice.battery == nil ? 0.55 : 0.25), lineWidth: 2.5)
                                     .padding(3)
@@ -136,7 +169,7 @@ struct NotchRootView: View {
                                             .padding(3)
                                     }.id(notice.id)
                                 }
-                                AirPodsNoticeGlyph(notice: notice, artwork: artwork, model: model, size: 22)
+                                AirPodsNoticeGlyph(notice: notice, artwork: artwork, model: model, size: 18)
                                     .id("\(notice.id)/\(artwork.productID)/\(artwork.colorID ?? -1)")
                             }
                             .overlay {
@@ -146,56 +179,74 @@ struct NotchRootView: View {
                                         .foregroundStyle(.white.opacity(0.65))
                                 }
                             }
-                            .frame(width: NotchModel.airPodsPillSize, height: NotchModel.airPodsPillSize)
+                            .frame(width: model.bubbleSize, height: model.bubbleSize)
                     }
                     .id(notice.id)
+                    .themed("bubble.airpods")
                     .fixedSize(horizontal: true, vertical: false)
                 }
             }
 
-            BubbleSatellite(model: model, kind: .music, item: model.showsMediaBubble ? true : nil,
-                            lane: .init(edge: left, y: satelliteY, width: 34, side: .leading)) { _ in
+            BubbleSatellite(model: model, kind: .music, item: model.showsMediaBubble || model.showsLockBubble ? true : nil,
+                            lane: .init(edge: left, y: satelliteY, width: model.bubbleSize, side: .leading)) { _ in
                 Button { model.activateBubble() } label: {
-                    Circle().fill(Color.notchSurface)
+                    Circle().fill(model.theme.element(model.showsLockBubble ? "bubble.lock" : "bubble.music").color("backgroundColor", .notchSurface))
                         .overlay {
                             SpecularGlassRim(surface: Circle(), edge: Circle(), highlight: model.bubbleLighting.point,
                                              strength: model.bubbleLighting.strength, staticPreview: staticPreview)
                         }
-                        .frame(width: 34, height: 34).contentShape(Circle())
+                        .overlay {
+                            if model.showsLockBubble {
+                                Image(systemName: model.theme.string(model.screenLocked ? "symbols.locked" : "symbols.unlocked", model.screenLocked ? "lock.fill" : "lock.open.fill"))
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .contentTransition(reduceMotion || staticPreview ? .identity : symbolReplaceTransition)
+                                    .animation(reduceMotion || staticPreview ? nil : .easeInOut(duration: 0.24), value: model.screenLocked)
+                            }
+                        }
+                        .frame(width: model.bubbleSize, height: model.bubbleSize).contentShape(Circle())
                 }
-                .accessibilityLabel("Return to Now Playing")
-                .help("Return to Now Playing")
+                .themed(model.showsLockBubble ? "bubble.lock" : "bubble.music")
+                .allowsHitTesting(!model.showsLockBubble)
+                .accessibilityLabel(model.showsLockBubble ? (model.screenLocked ? "Mac locked" : "Mac unlocked") : "Return to Now Playing")
+                .help(model.showsLockBubble ? "Mac locked" : "Return to Now Playing")
             }
 
             ZStack(alignment: .top) {
-                NotchSilhouette(radius: surface.radius, ear: surface.ear)
-                    .fill(Color.notchSurface)
-                    .overlay {
-                        NotchGlassRim(radius: surface.radius, ear: surface.ear, highlight: model.edgeLighting.point,
-                                      strength: model.edgeLighting.strength, staticPreview: staticPreview)
-                    }
-                    .shadow(color: .black.opacity(expanded ? 0.32 : 0), radius: 15, x: 0, y: 6)
+                NotchSurfaceBackground(surface: surface, liquidGlass: model.theme.flag("glass.enabled", model.preferences.liquidGlass),
+                                       cameraHeight: model.cameraHeight,
+                                       expandedHeight: model.cameraHeight + (model.media.snapshot?.isBrowserAudio == true ? 84 : 146) - 2,
+                                       lighting: model.edgeLighting, staticPreview: staticPreview)
+                    .themed("surface")
+                    .shadow(color: .black.opacity(expanded ? (model.theme.flag("glass.enabled", model.preferences.liquidGlass) ? model.theme.number("glass.shadowOpacity", 0) : model.theme.number("surface.shadowOpacity", 0.32)) : 0),
+                            radius: model.theme.number("surface.shadowRadius", 15), x: model.theme.number("surface.shadowX", 0), y: model.theme.number("surface.shadowY", 6))
                     .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: expanded)
-                ZStack(alignment: .top) {
+                ZStack(alignment: model.inlineAirPods == nil ? .top : .topLeading) {
                     content
                         .frame(width: model.bodyWidth, height: model.contentHeight, alignment: .top)
                         .id(model.presentation)
                         .transition(IslandMotion.content)
                 }
                 .animation(IslandMotion.fade, value: model.presentation)
-                .frame(width: surface.width, height: surface.height, alignment: .top)
+                .frame(width: surface.width, height: surface.height, alignment: model.inlineAirPods == nil ? .top : .topLeading)
                 .overlay(alignment: .topLeading) {
                     WaveformView(model: model, waveform: model.waveform, visible: waveformVisible)
+                        .themed("waveform")
                         .position(x: surface.width - surface.waveformInset, y: surface.waveformY)
                         .opacity(waveformVisible ? 1 : 0)
                         .animation(IslandMotion.fade, value: waveformVisible)
                         .allowsHitTesting(false)
-                    if let compactVolume {
-                        NotchVolumeBar(osd: compactVolume, showsMuteMark: true)
-                            .position(x: surface.width - surface.waveformInset, y: surface.waveformY)
-                            .animation(reduceMotion ? nil : IslandMotion.shape, value: compactVolume.level)
+                    if let volume = compactVolume ?? expandedVolume {
+                        let expandedCenter = (model.cameraWidth + model.osdTrailingWidth) / 2
+                        let insideEdge = (surface.width - NotchVolumeBar.standardWidth) / 2 - 4
+                        let x = expandedVolume == nil ? surface.width - surface.waveformInset
+                            : surface.width / 2 + min(expandedCenter, insideEdge)
+                        NotchVolumeBar(osd: volume, showsMuteMark: true,
+                                       width: expandedVolume == nil ? NotchVolumeBar.standardWidth : 47)
+                            .position(x: x, y: model.cameraHeight / 2)
+                            .animation(reduceMotion ? nil : IslandMotion.shape, value: volume.level)
                             .accessibilityLabel("Volume")
-                            .accessibilityValue(compactVolume.label)
+                            .accessibilityValue(volume.label)
+                            .transition(.opacity)
                             .allowsHitTesting(false)
                     }
                 }
@@ -207,8 +258,10 @@ struct NotchRootView: View {
             .offset(x: (Self.canvasWidth - surface.width) / 2 + surface.offset - surface.ear)
 
             FlippingArtworkView(image: model.media.snapshot?.artwork, identity: model.media.snapshot?.identity,
-                                size: surface.artworkSize, radius: min(13, surface.artworkSize * 0.22),
+                                flipsBackward: model.media.artworkFlipsBackward,
+                                size: surface.artworkSize, radius: model.theme.number("layout.artworkRadius", min(13, surface.artworkSize * 0.22)),
                                 onPhase: { model.recordArtworkTurn($0) })
+                .themed("artwork")
                 .scaleEffect(playing ? 1 : 0.86)
                 .opacity(playing ? 1 : 0.65)
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: playing)
@@ -218,8 +271,13 @@ struct NotchRootView: View {
                 .animation(IslandMotion.fade, value: mediaVisible)
                 .allowsHitTesting(false)
 
+            NotchThemeLayers(model: model)
+                .frame(width: surface.width, height: surface.height, alignment: .topLeading)
+                .clipShape(NotchSilhouette(radius: surface.radius, ear: surface.ear))
+                .offset(x: (Self.canvasWidth - surface.width) / 2 + surface.offset)
+
             // Keep foreground transition blur away from the camera throughout each morph.
-            UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 12, bottomTrailingRadius: 12, topTrailingRadius: 0)
+            NotchSilhouette(radius: 12, ear: 0)
                 .fill(.black).frame(width: model.cameraWidth, height: model.cameraHeight)
                 .offset(x: (Self.canvasWidth - model.cameraWidth) / 2)
                 .allowsHitTesting(false).accessibilityHidden(true)
@@ -237,14 +295,21 @@ struct NotchRootView: View {
         .tint(model.accent)
         .buttonStyle(.plain)
         .preferredColorScheme(.dark)
+        .environment(\.notchTheme, model.theme)
         .onAppear {
+            motion.response = model.theme.number("motion.response", 0.32)
+            motion.damping = model.theme.number("motion.damping", 0.88)
             motion.onFrame = { model.present($0) }
             motion.update(model.surfaceTarget, screen: model.displayScreen, immediate: true)
         }
-        .onChange(of: model.surfaceTarget) { _, value in motion.update(value, screen: model.displayScreen) }
-        .onChange(of: model.showsMediaBubble) { _, _ in model.onSurfaceChanged?() }
-        .onChange(of: reduceMotion) { _, _ in motion.update(model.surfaceTarget, screen: model.displayScreen, immediate: true) }
-        .onChange(of: model.hidden) { _, hidden in
+        .notchOnChange(of: model.surfaceTarget) { _, value in
+            motion.response = max(0.05, model.theme.number("motion.response", 0.32))
+            motion.damping = max(0.1, model.theme.number("motion.damping", 0.88))
+            motion.update(value, screen: model.displayScreen)
+        }
+        .notchOnChange(of: model.showsMediaBubble) { _, _ in model.onSurfaceChanged?() }
+        .notchOnChange(of: reduceMotion) { _, _ in motion.update(model.surfaceTarget, screen: model.displayScreen, immediate: true) }
+        .notchOnChange(of: model.hidden) { _, hidden in
             if hidden { motion.stop() } else { motion.update(model.surfaceTarget, screen: model.displayScreen, immediate: true) }
         }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.willSleepNotification)) { _ in motion.stop() }
@@ -257,12 +322,17 @@ struct NotchRootView: View {
     @ViewBuilder private var content: some View {
         switch model.presentation {
         case .idle:
-            if model.screenLocked {
+            if model.showsLockLayout {
                 HStack(spacing: 0) {
-                    Image(systemName: "lock.fill")
+                    Image(systemName: model.theme.string(model.screenLocked ? "symbols.locked" : "symbols.unlocked", model.screenLocked ? "lock.fill" : "lock.open.fill"))
                         .font(.system(size: 14, weight: .semibold))
+                        .contentTransition(reduceMotion || staticPreview ? .identity : symbolReplaceTransition)
+                        .animation(reduceMotion || staticPreview ? nil : .easeInOut(duration: 0.24), value: model.screenLocked)
+                        .opacity(model.isUnlocking && !staticPreview ? 0 : 1)
+                        .animation(model.isUnlocking && !reduceMotion && !staticPreview
+                            ? .easeOut(duration: 0.12).delay(0.27) : nil, value: model.isUnlocking)
                         .frame(width: model.compactLeadingWidth)
-                        .accessibilityLabel("Mac locked")
+                        .accessibilityLabel(model.screenLocked ? "Mac locked" : "Mac unlocked")
                     Color.clear.frame(width: model.cameraWidth)
                 }
                 .frame(height: model.cameraHeight)
@@ -295,14 +365,29 @@ struct NotchRootView: View {
         case .expanded:
             ExpandedPlayerView(model: model, media: model.media)
         case .notice:
-            if let notice = model.mainNotice { InlineNoticeView(notice: notice, model: model, cameraWidth: model.cameraWidth, leadingWidth: model.noticeLeadingWidth, trailingWidth: model.noticeTrailingWidth, height: model.cameraHeight) }
+            if let notice = model.mainNotice {
+                let header = InlineNoticeView(notice: notice, model: model, cameraWidth: model.cameraWidth,
+                                              leadingWidth: model.noticeLeadingWidth, trailingWidth: model.noticeTrailingWidth,
+                                              height: model.cameraHeight)
+                if model.inlineAirPods != nil {
+                    header.themed("notice")
+                        .contentShape(Rectangle())
+                        .onTapGesture { model.toggleAirPodsDetails(notice.id) }
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { model.toggleAirPodsDetails(notice.id) }
+                    .accessibilityHint(model.showsInlineAirPodsDetails ? "Collapse battery details" : "Expand battery details")
+                    .animation(reduceMotion || staticPreview ? nil : IslandMotion.satellite, value: model.showsInlineAirPodsDetails)
+                } else {
+                    header.themed("notice")
+                }
+            }
         case .osd:
             if let osd = model.osd {
                 HStack(spacing: 0) {
                     if model.preservesMediaArtwork { Color.clear.frame(width: model.osdLeadingWidth) }
                     else {
                         let animatesSpeaker = osd.kind == .volume && model.media.snapshot == nil && !reduceMotion
-                        Image(systemName: osd.symbol)
+                        Image(systemName: model.theme.string(osd.kind == .brightness ? "symbols.brightness" : osd.muted ? "symbols.muted" : "symbols.volume", osd.symbol))
                             .font(.system(size: 24, weight: .medium))
                             .frame(width: model.osdLeadingWidth)
                             .contentTransition(animatesSpeaker ? symbolReplaceTransition : .identity)
@@ -312,7 +397,7 @@ struct NotchRootView: View {
                     NotchVolumeBar(osd: osd, showsMuteMark: model.preservesMediaArtwork)
                         .frame(width: model.osdTrailingWidth)
                         .animation(IslandMotion.shape, value: osd.level)
-                }.frame(height: model.cameraHeight).accessibilityElement(children: .ignore)
+                }.frame(height: model.cameraHeight).themed("osd").accessibilityElement(children: .ignore)
                     .accessibilityLabel(osd.kind == .volume ? "Volume" : "Brightness")
                     .accessibilityValue(osd.label)
             }
@@ -336,9 +421,11 @@ private struct BubbleLane {
     let width: CGFloat
     let side: HorizontalEdge
     var occupiedWidth: CGFloat = 0
+    var height: CGFloat = 32
+    var gap: CGFloat = 8
 
     var direction: CGFloat { side == .leading ? -1 : 1 }
-    @MainActor var restGap: CGFloat { NotchModel.volumePillGap }
+    var restGap: CGFloat { gap }
 }
 
 private struct BubbleSatellite<Item: Equatable, Content: View>: View {
@@ -355,13 +442,15 @@ private struct BubbleSatellite<Item: Equatable, Content: View>: View {
 
     var body: some View {
         var displayedLane = lane
+        displayedLane.height = model.bubbleSize
+        displayedLane.gap = model.bubbleGap
         if !reduceMotion && !staticPreview {
             displayedLane.occupiedWidth = max(lane.occupiedWidth, reservedWidth)
         }
         return BubbleFlight(progress: item == nil ? 0 : 1, lane: displayedLane, moves: !reduceMotion && !staticPreview) {
             if let displayed = item ?? retainedItem {
                 content(displayed)
-                    .onGeometryChange(for: CGRect.self) { proxy in
+                    .notchOnGeometryChange(for: CGRect.self) { proxy in
                         proxy.frame(in: .named(NotchRootView.canvasSpace))
                     } action: { frame in
                         if !staticPreview { model.presentSatellite(kind, frame: frame) }
@@ -375,7 +464,7 @@ private struct BubbleSatellite<Item: Equatable, Content: View>: View {
         .animation(reduceMotion || staticPreview ? nil : .easeOut(duration: 0.16), value: displayedLane.occupiedWidth)
         .allowsHitTesting(item != nil)
         .accessibilityHidden(item == nil)
-        .onChange(of: item, initial: true) { _, current in
+        .notchOnChange(of: item, initial: true) { _, current in
             // Keep the outgoing content available for the spring, including on a rapid reversal.
             if let current { retainedItem = current }
         }
@@ -415,7 +504,7 @@ private struct BubbleFlight<Content: View>: View, Animatable {
         let remaining = (1 - phase) * (1 - phase) * (1 + 0.4 * phase)
         let gap = lane.restGap + occupiedWidth - (moves ? travel * remaining : 0)
         let left = lane.edge + lane.direction * gap - (lane.side == .leading ? lane.width : 0)
-        let height = NotchModel.volumePillHeight
+        let height = lane.height
         let reveal = unit((gap + lane.width * 0.65) / (lane.width * 0.65))
         let emergence = reveal * reveal * (3 - 2 * reveal)
         let contentOpacity = moves ? emergence * openLane + phase * (1 - openLane) : phase
@@ -484,6 +573,34 @@ private struct LiquidBubbleBridge: Shape {
     }
 }
 
+private struct NotchProgressTrack: View {
+    let level: Double
+    let tint: Color
+    var backgroundOpacity = 0.2
+
+    var body: some View {
+        Capsule(style: .circular).fill(.white.opacity(backgroundOpacity))
+            .overlay { NotchProgressFill(level: level).fill(tint) }
+    }
+}
+
+private struct NotchProgressFill: Shape {
+    var level: Double
+
+    var animatableData: Double {
+        get { level }
+        set { level = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let progress = unit(level)
+        guard progress > 0, !rect.isEmpty else { return Path() }
+        let width = rect.width * progress
+        let fill = CGRect(x: rect.minX, y: rect.minY, width: width, height: rect.height)
+        return Capsule(style: .circular).path(in: fill)
+    }
+}
+
 private struct NotchVolumeBar: View {
     static let standardWidth: CGFloat = 55
     let osd: SystemOSD
@@ -492,11 +609,8 @@ private struct NotchVolumeBar: View {
     private let height: CGFloat = 6
 
     var body: some View {
-        Capsule().fill(.white.opacity(0.2)).frame(width: width, height: height)
-            .overlay(alignment: .leading) {
-                Capsule().fill(.white)
-                    .frame(width: osd.muted ? 0 : width * unit(osd.level), height: height)
-            }
+        NotchProgressTrack(level: osd.muted ? 0 : osd.level, tint: .white)
+            .frame(width: width, height: height)
             .overlay {
                 if showsMuteMark && osd.muted {
                     Image(systemName: "xmark")
@@ -515,23 +629,23 @@ struct ExpandedPlayerView: View {
     var body: some View {
         VStack(spacing: 0) {
             Color.clear.frame(height: model.cameraHeight)
-            HStack(spacing: 10) {
+            HStack(spacing: model.theme.number("layout.headerSpacing", 10)) {
                 Color.clear.frame(width: 56, height: 56)
-                VStack(alignment: .leading, spacing: 6) {
-                    MarqueeText(text: media.snapshot?.identity.title ?? "Nothing playing", font: .system(size: 26 * model.uiScale, weight: .semibold))
-                    MarqueeText(text: media.snapshot?.identity.artist ?? "", font: .system(size: 22 * model.uiScale), color: .notchSecondary)
+                VStack(alignment: .leading, spacing: model.theme.number("layout.metadataSpacing", 6)) {
+                    MarqueeText(text: media.snapshot?.identity.title ?? "Nothing playing", font: .system(size: model.theme.element("title").number("fontSize", 26 * model.uiScale), weight: .semibold), color: model.theme.element("title").color("color", .white)).themed("title")
+                    MarqueeText(text: media.snapshot?.identity.artist ?? "", font: .system(size: model.theme.element("artist").number("fontSize", 22 * model.uiScale)), color: model.theme.element("artist").color("color", model.theme.color("colors.secondaryColor", .notchSecondary))).themed("artist")
                 }.frame(maxWidth: .infinity, alignment: .leading)
-                    .offset(y: -7)
+                    .offset(y: model.theme.number("layout.metadataY", -7)).themed("metadata")
                 Color.clear.frame(width: model.expandedWaveformInset + WaveformView.width / 2 - 18)
-            }.padding(.horizontal, 18).padding(.top, 8)
-            if let item = media.snapshot, item.canControl { SeekBar(model: model, item: item).padding(.horizontal, SeekBar.horizontalInset).padding(.top, 2) }
+            }.padding(.horizontal, model.theme.number("layout.headerPadding", 18)).padding(.top, model.theme.number("layout.headerTop", 8))
+            if let item = media.snapshot, item.canControl { SeekBar(model: model, item: item).themed("progress").padding(.horizontal, model.theme.number("layout.progressPadding", SeekBar.horizontalInset)).padding(.top, model.theme.number("layout.progressTop", 2)) }
             if media.snapshot?.canControl != false {
-                HStack(spacing: 7) {
-                    ExpandedTransportButton("backward.fill", label: "Previous track", glyphWidth: 36, glyphHeight: 23) { media.command("previous track") }
-                    ExpandedTransportButton(media.snapshot?.isPlaying == true ? "pause.fill" : "play.fill", label: media.snapshot?.isPlaying == true ? "Pause" : "Play", glyphWidth: 27, glyphHeight: 34) { media.command("playpause") }
-                    ExpandedTransportButton("forward.fill", label: "Next track", glyphWidth: 36, glyphHeight: 23) { media.command("next track") }
+                HStack(spacing: model.theme.number("layout.controlsSpacing", 7)) {
+                    ExpandedTransportButton("backward.fill", label: "Previous track", glyphWidth: 36, glyphHeight: 23) { media.command("previous track") }.themed("previous")
+                    ExpandedTransportButton(media.snapshot?.isPlaying == true ? "pause.fill" : "play.fill", label: media.snapshot?.isPlaying == true ? "Pause" : "Play", glyphWidth: 27, glyphHeight: 34) { media.command("playpause") }.themed("playPause")
+                    ExpandedTransportButton("forward.fill", label: "Next track", glyphWidth: 36, glyphHeight: 23) { media.command("next track") }.themed("next")
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity).themed("controls")
                 .overlay(alignment: .leading) {
                 if let item = media.snapshot, item.isAppleMusic {
                     Button { media.toggleFavorite() } label: {
@@ -539,7 +653,7 @@ struct ExpandedPlayerView: View {
                             .id(item.identity.identifier)
                             .frame(width: 32, height: 44).contentShape(Rectangle())
                     }
-                    .buttonStyle(PressScaleStyle())
+                    .buttonStyle(PressScaleStyle()).themed("favorite")
                     .disabled(!item.canFavorite || media.favoriteChanging)
                     .opacity(item.canFavorite ? 1 : 0.4)
                     .accessibilityLabel(item.isFavorited == true ? "Remove favourite" : "Favourite song")
@@ -549,31 +663,19 @@ struct ExpandedPlayerView: View {
                 }
                 .overlay(alignment: .trailing) {
                     if media.snapshot?.isAppleMusic == true {
-                        MusicAirPlayButton(model: model, media: media)
+                        MusicAirPlayButton(model: model, media: media).themed("airplay")
                     }
                 }
-                .padding(.horizontal, 24).frame(height: 44).padding(.top, 2)
+                .padding(.horizontal, model.theme.number("layout.controlsPadding", 24)).frame(height: 44).padding(.top, model.theme.number("layout.controlsTop", 2))
             }
         }
         .offset(y: -6)
         .frame(width: model.bodyWidth)
-        .overlay(alignment: .top) {
-            if model.preservesMediaArtwork, let osd = model.osd {
-                let collapsedCenter = (model.cameraWidth + model.osdTrailingWidth) / 2
-                let insideEdge = (model.bodyWidth - NotchVolumeBar.standardWidth) / 2 - 4
-                NotchVolumeBar(osd: osd, showsMuteMark: true, width: 47)
-                    .frame(height: model.cameraHeight)
-                    .offset(x: min(collapsedCenter, insideEdge))
-                    .animation(reduceMotion ? nil : IslandMotion.shape, value: osd.level)
-                    .accessibilityLabel("Volume").accessibilityValue(osd.label)
-                    .transition(.opacity)
-            }
-        }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: model.preservesMediaArtwork)
     }
 }
 
 private struct FavoriteStar: View {
+    @Environment(\.notchTheme) private var theme
     let isFavorited: Bool
     let accent: Color
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -585,16 +687,16 @@ private struct FavoriteStar: View {
     }
 
     private func star(filled: Bool) -> some View {
-        Image(systemName: filled ? "star.fill" : "star")
+        Image(systemName: theme.string(filled ? "symbols.favorited" : "symbols.favorite", filled ? "star.fill" : "star"))
             .font(.system(size: 24, weight: .regular))
-            .foregroundStyle(filled ? accent : Color.white.opacity(0.55))
+            .foregroundStyle(theme.element("favorite").color("color", filled ? accent : Color.white.opacity(0.55)))
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: accent)
     }
 
     var body: some View {
         if reduceMotion {
             star(filled: isFavorited)
-        } else {
+        } else if #available(macOS 14.0, *) {
             KeyframeAnimator(initialValue: Motion(), trigger: isFavorited) { motion in
                 let fill = unit(motion.fadingFill)
                 star(filled: isFavorited)
@@ -629,6 +731,8 @@ private struct FavoriteStar: View {
                     CubicKeyframe(0, duration: 0.18)
                 }
             }
+        } else {
+            star(filled: isFavorited).animation(.spring(response: 0.25, dampingFraction: 0.8), value: isFavorited)
         }
     }
 }
@@ -707,7 +811,7 @@ private struct MusicAirPlayButton: View {
                 loading = false
             }
         }
-        .onChange(of: showing) { _, open in
+        .notchOnChange(of: showing) { _, open in
             if !open { model.pinned = wasPinned }
         }
     }
@@ -715,18 +819,24 @@ private struct MusicAirPlayButton: View {
 
 private var symbolReplaceTransition: ContentTransition {
     if #available(macOS 15.0, *) { return .symbolEffect(.replace.magic(fallback: .replace)) }
-    return .symbolEffect(.replace)
+    if #available(macOS 14.0, *) { return .symbolEffect(.replace) }
+    return .opacity
 }
 
 private struct ExpandedTransportButton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.staticNotchPreview) private var staticPreview
     @State private var skipTrigger = 0
+    @Environment(\.notchTheme) private var theme
+    private var element: NotchTheme { theme.element(symbol == "backward.fill" ? "previous" : symbol == "forward.fill" ? "next" : "playPause") }
     var symbol: String
     var label: String
     var glyphWidth: CGFloat
     var glyphHeight: CGFloat
     var action: () -> Void
+    private var displaySymbol: String {
+        theme.string("symbols." + (symbol == "backward.fill" ? "previous" : symbol == "forward.fill" ? "next" : symbol == "play.fill" ? "play" : "pause"), symbol)
+    }
     private var isPlayPause: Bool { symbol == "play.fill" || symbol == "pause.fill" }
 
     init(_ symbol: String, label: String, glyphWidth: CGFloat, glyphHeight: CGFloat, action: @escaping () -> Void) {
@@ -738,29 +848,34 @@ private struct ExpandedTransportButton: View {
             action()
         } label: {
             Group {
-                if !staticPreview && (symbol == "forward.fill" || symbol == "backward.fill") {
+                if !staticPreview && displaySymbol == symbol && (symbol == "forward.fill" || symbol == "backward.fill") {
                     NativeSkipGlyph(backwards: symbol == "backward.fill", trigger: skipTrigger, reduceMotion: reduceMotion)
-                        .frame(width: glyphWidth, height: glyphHeight).allowsHitTesting(false)
+                        .frame(width: element.number("glyphWidth", glyphWidth), height: element.number("glyphHeight", glyphHeight)).colorMultiply(element.color("color", .white)).allowsHitTesting(false)
                 } else if isPlayPause {
                     // A fixed font/canvas prevents aspect-fit resizing before Magic Replace.
-                    Image(systemName: symbol)
-                        .font(.system(size: glyphHeight, weight: .semibold))
+                    Image(systemName: displaySymbol)
+                        .font(.system(size: element.number("fontSize", glyphHeight), weight: .semibold))
                         .frame(width: 44, height: 44)
                         .contentTransition(symbolTransition)
                         .animation(reduceMotion ? nil : .default, value: symbol)
-                        .foregroundStyle(.white.opacity(0.88))
+                        .foregroundStyle(element.color("color", .white.opacity(0.88)))
                 } else {
-                    Image(systemName: symbol).resizable().aspectRatio(contentMode: .fit)
-                        .frame(width: glyphWidth, height: glyphHeight).fontWeight(.semibold)
+                    Image(systemName: displaySymbol).resizable().aspectRatio(contentMode: .fit)
+                        .frame(width: element.number("glyphWidth", glyphWidth), height: element.number("glyphHeight", glyphHeight)).fontWeight(.semibold)
                         .contentTransition(symbolTransition)
                         .animation(reduceMotion ? nil : .default, value: symbol)
-                        .foregroundStyle(.white.opacity(0.88))
+                        .foregroundStyle(element.color("color", .white.opacity(0.88)))
                 }
             }
                 .frame(width: 56, height: 44).contentShape(Rectangle())
         }
         .buttonStyle(PressScaleStyle(scalesWhenPressed: !isPlayPause))
         .accessibilityLabel(label).help(label)
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("DynanotchHardwareTransport"))) { notification in
+            guard let code = notification.object as? Int else { return }
+            if (symbol == "forward.fill" && [17, 19].contains(code))
+                || (symbol == "backward.fill" && [18, 20].contains(code)) { skipTrigger &+= 1 }
+        }
     }
     private var symbolTransition: ContentTransition {
         reduceMotion ? .identity : symbolReplaceTransition
@@ -774,6 +889,7 @@ struct SeekBar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var model: NotchModel
     var item: MediaSnapshot
+    var tint: Color? = nil
     @State private var previewRatio: Double = 0
     @State private var scrubTrack: TrackIdentity?
     @State private var hover = false
@@ -782,18 +898,22 @@ struct SeekBar: View {
             let position = model.scrubbing ? previewRatio * item.duration : item.currentPosition
             let ratio = item.duration > 0 ? unit(position / item.duration) : 0
             HStack(spacing: 10) {
-                Text(item.duration > 0 ? clockText(position) : "–:––").frame(width: 34, alignment: .leading)
+                Text(item.duration > 0 ? clockText(position) : "–:––")
+                    .contentTransition(.identity).frame(width: 34, alignment: .leading).themed("elapsed")
                 GeometryReader { geometry in
+                    let engaged = hover || model.scrubbing
+                    let trackHeight: CGFloat = engaged ? 6 : 4
                     ZStack(alignment: .leading) {
-                        Capsule().fill(.white.opacity(0.18))
-                        Capsule().fill(model.accent)
+                        NotchProgressTrack(level: ratio, tint: tint ?? model.accent, backgroundOpacity: 0.18)
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: model.accent)
-                            .frame(width: max(0, geometry.size.width * ratio))
-                        if hover || model.scrubbing {
-                            Circle().fill(.white).frame(width: 9, height: 9).offset(x: max(0, min(geometry.size.width - 9, geometry.size.width * ratio - 4.5)))
-                        }
+                        Circle().fill(.white)
+                            .frame(width: trackHeight, height: trackHeight)
+                            .offset(x: max(0, min(geometry.size.width - trackHeight, geometry.size.width * ratio - trackHeight / 2)))
+                            .opacity(engaged ? 1 : 0)
+                            .allowsHitTesting(false)
                     }
-                    .frame(height: hover || model.scrubbing ? 6 : 4)
+                    .frame(height: trackHeight)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: engaged)
                     .frame(height: geometry.size.height)
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 0).onChanged { value in
@@ -815,8 +935,10 @@ struct SeekBar: View {
                         if item.duration > 0 { model.media.seek(unit((position + (direction == .increment ? 5 : -5)) / item.duration), on: item.identity) }
                     }
                 }.frame(height: 18)
-                Text(item.duration > 0 ? "−" + clockText(max(0, item.duration - position)) : "–:––").frame(width: Self.remainingTimeWidth, alignment: .trailing)
-            }.font(.system(size: 22 * model.uiScale, weight: .medium)).monospacedDigit().foregroundStyle(Color.notchSecondary)
+                Text(item.duration > 0 ? "−" + clockText(max(0, item.duration - position)) : "–:––")
+                    .contentTransition(.identity).frame(width: Self.remainingTimeWidth, alignment: .trailing).themed("remaining")
+            }.font(.system(size: 22 * model.uiScale, weight: .medium)).monospacedDigit()
+                .foregroundStyle(model.theme.color("colors.timeColor", model.theme.flag("glass.enabled", model.preferences.liquidGlass) ? Color.white : Color.notchSecondary))
         }.onDisappear { if model.scrubbing { model.finishScrubbing() } }
     }
 }
@@ -855,12 +977,12 @@ struct WaveformView: View {
                 WaveformPreview(waveform: waveform, accent: model.accent,
                                 moving: model.media.snapshot?.isPlaying == true && !reduceMotion)
             } else {
-                LiveWaveform(waveform: waveform, accent: NSColor(model.accent),
+                LiveWaveform(waveform: waveform, accent: NSColor(model.theme.element("waveform").color("color", model.accent)), theme: model.theme,
                              playing: model.media.snapshot?.isPlaying == true,
                              visible: visible, reduceMotion: reduceMotion)
             }
         }
-        .frame(width: Self.width, height: 26)
+        .frame(width: model.theme.element("waveform").number("width", Self.width), height: model.theme.element("waveform").number("height", 26))
         .accessibilityHidden(true)
         .help("Live system audio waveform")
     }
@@ -886,6 +1008,7 @@ private struct WaveformPreview: View {
 private struct LiveWaveform: NSViewRepresentable {
     var waveform: WaveformService
     var accent: NSColor
+    var theme: NotchTheme
     var playing: Bool
     var visible: Bool
     var reduceMotion: Bool
@@ -895,12 +1018,35 @@ private struct LiveWaveform: NSViewRepresentable {
     }
 
     func updateNSView(_ view: WaveformLayerView, context: Context) {
+        view.configure(theme)
         view.update(accent: accent, moving: playing && visible && !reduceMotion, animate: visible && !reduceMotion)
     }
 }
 
 @MainActor private final class WaveformLayerView: NSView {
-    private let bars = (0..<6).map { _ in CALayer() }
+    private var bars = (0..<6).map { _ in CALayer() }
+    private var style = NotchTheme()
+    func configure(_ theme: NotchTheme) {
+        style = theme
+        let count = max(1, min(24, Int(theme.number("layout.waveformBars", 6))))
+        if bars.count != count {
+            bars.forEach { $0.removeFromSuperlayer() }
+            bars = (0..<count).map { _ in let bar = CALayer(); bar.backgroundColor = color; layer?.addSublayer(bar); return bar }
+        }
+        layoutBars()
+    }
+    override func layout() { super.layout(); layoutBars() }
+    private func layoutBars() {
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        let width = max(0.5, min(30, style.number("layout.waveformBarWidth", 2.2)))
+        let spacing = max(0, min(30, style.number("layout.waveformBarSpacing", 2)))
+        for (index, bar) in bars.enumerated() {
+            bar.bounds.size.width = width
+            bar.position = CGPoint(x: bounds.midX + (CGFloat(index) - CGFloat(bars.count-1)/2) * (width + spacing), y: bounds.midY)
+            bar.cornerRadius = max(0, style.number("layout.waveformCornerRadius", 1.1))
+        }
+        CATransaction.commit()
+    }
     private let waveform: WaveformService
     private var subscription: AnyCancellable?
     private var moving = false
@@ -964,7 +1110,10 @@ private struct LiveWaveform: NSViewRepresentable {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for (index, bar) in bars.enumerated() {
-            let height = index < levels.count ? 3 + 22 * levels[index] : 3
+            let source = levels.isEmpty ? 0 : min(levels.count-1, index * levels.count / bars.count)
+            let minimum = max(0, style.number("layout.waveformMinHeight", 3))
+            let maximum = max(minimum, style.number("layout.waveformMaxHeight", 25))
+            let height = minimum + (maximum-minimum) * (levels.isEmpty ? 0 : levels[source])
             guard bar.bounds.height != height else { continue }
             let previous = settle ? bar.presentation()?.bounds ?? bar.bounds : nil
             bar.bounds.size.height = height
@@ -1002,10 +1151,12 @@ private struct BatteryFill<Content: View>: View {
 
 private struct ChargingBatteryGlyph: View {
     var level: Double?
+    var size: CGFloat = 28
+    @Environment(\.notchTheme) private var theme
 
     var body: some View {
-        let icon = Image(systemName: "battery.100percent.bolt")
-            .font(.system(size: 28, weight: .medium))
+        let icon = Image(systemName: theme.string("symbols.charging", "battery.100percent.bolt"))
+            .font(.system(size: size, weight: .medium))
         icon.foregroundStyle(.green.opacity(0.22))
             .overlay {
                 if let level {
@@ -1026,6 +1177,7 @@ private struct AirPodsBatterySatellite<Compact: View>: View {
     var notice: DeviceNotice
     @ObservedObject var model: NotchModel
     @ObservedObject var system: SystemService
+    var detailsOnly = false
     @ViewBuilder var compact: () -> Compact
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.staticNotchPreview) private var staticPreview
@@ -1046,6 +1198,10 @@ private struct AirPodsBatterySatellite<Compact: View>: View {
                 .init(label: "Left AirPod", symbol: symbol(.left), level: details?.left),
                 .init(label: "Right AirPod", symbol: symbol(.right), level: details?.right),
             ]
+        if detailsOnly {
+            AirPodsBatteryMorph(progress: 1, components: components, lighting: model.airPodsPillLighting,
+                               staticPreview: staticPreview, compact: compact)
+        } else {
         Button {
             model.toggleAirPodsDetails(notice.id)
         } label: {
@@ -1060,6 +1216,7 @@ private struct AirPodsBatterySatellite<Compact: View>: View {
             ? components.map { "\($0.label): \($0.reading)" }.joined(separator: ", ")
             : notice.battery.map { "\(Int(($0 * 100).rounded())) percent" } ?? "Battery level unavailable")
         .accessibilityHint(expanded ? "Collapse battery details" : "Expand battery details")
+        }
     }
 
     private enum Part { case left, right, chargingCase }
@@ -1070,10 +1227,12 @@ private struct AirPodsBatterySatellite<Compact: View>: View {
         switch part {
         case .left:
             fallback = "airpod.left"
-            candidate = artwork?.family == .airpodsPro ? "airpodpro.left" : "airpod.gen3.left"
+            candidate = artwork?.family == .airpodsPro ? "airpodpro.left"
+                : ([8217, 8219, 8240, 8242, 8246, 8247].contains(artwork?.productID ?? 0) ? "airpod.gen4.left" : "airpod.gen3.left")
         case .right:
             fallback = "airpod.right"
-            candidate = artwork?.family == .airpodsPro ? "airpodpro.right" : "airpod.gen3.right"
+            candidate = artwork?.family == .airpodsPro ? "airpodpro.right"
+                : ([8217, 8219, 8240, 8242, 8246, 8247].contains(artwork?.productID ?? 0) ? "airpod.gen4.right" : "airpod.gen3.right")
         case .chargingCase:
             fallback = "airpods.chargingcase"
             if artwork?.family == .airpodsPro {
@@ -1085,8 +1244,10 @@ private struct AirPodsBatterySatellite<Compact: View>: View {
             }
         }
         let usesModernSymbols = artwork?.family == .airpodsPro || [8211, 8217, 8219, 8240, 8242, 8246, 8247].contains(artwork?.productID ?? 0)
-        return usesModernSymbols && NSImage(systemSymbolName: candidate, accessibilityDescription: nil) != nil
-            ? candidate : fallback
+        let modernFallback = part == .left ? "airpod.gen3.left" : part == .right ? "airpod.gen3.right" : fallback
+        let automatic = (usesModernSymbols ? [candidate, modernFallback, fallback] : [fallback])
+            .first { NSImage(systemSymbolName: $0, accessibilityDescription: nil) != nil } ?? fallback
+        return model.theme.string(part == .chargingCase ? "symbols.airPodsCase" : part == .left ? "symbols.airPodLeft" : "symbols.airPodRight", automatic)
     }
 
 }
@@ -1099,6 +1260,7 @@ private struct AirPodsBatteryComponent {
 }
 
 private struct AirPodsBatteryMorph<Compact: View>: View, Animatable {
+    @Environment(\.notchTheme) private var theme
     var progress: Double
     var components: [AirPodsBatteryComponent]
     var lighting: EdgeLighting
@@ -1117,7 +1279,7 @@ private struct AirPodsBatteryMorph<Compact: View>: View, Animatable {
         let width = height + (expandedWidth - height) * phase
         let compactOpacity = 1 - unit(phase / 0.52)
         ZStack(alignment: .leading) {
-            Capsule().fill(Color.notchSurface)
+            Capsule().fill(theme.element("airpods.details").color("backgroundColor", .notchSurface))
             HStack(spacing: 0) {
                 ForEach(components.indices, id: \.self) { index in
                     let component = components[index]
@@ -1139,7 +1301,7 @@ private struct AirPodsBatteryMorph<Compact: View>: View, Animatable {
                                     .foregroundStyle(.white.opacity(0.65))
                             }
                         }
-                        .frame(width: 26, height: 26)
+                        .frame(width: height - 6, height: height - 6)
                         Text(component.level == nil ? "—" : component.reading)
                             .monospacedDigit().font(.system(size: 11, weight: .medium))
                     }
@@ -1165,6 +1327,7 @@ private struct AirPodsBatteryMorph<Compact: View>: View, Animatable {
                 .allowsHitTesting(false)
         }
         .contentShape(Capsule())
+        .themed("airpods.details")
         .accessibilityHidden(true)
     }
 }
@@ -1179,6 +1342,7 @@ private struct AirPodsNoticeGlyph: View {
     var body: some View {
         SystemAirPodsGlyph(artwork: artwork, fallback: notice.kind.symbol, connected: notice.connected, size: size,
                            playMovie: !staticPreview && model.shouldPlayAirPodsMovie(notice.id),
+                           loops: model.heldAirPodsNotice == notice.id,
                            onPlaybackReady: { model.airPodsMovieReady(notice.id, duration: $0) },
                            onPlaybackEnd: { model.airPodsMovieEnded(notice.id) },
                            onPlaybackFailure: { model.airPodsMovieFailed(notice.id) })
@@ -1186,6 +1350,16 @@ private struct AirPodsNoticeGlyph: View {
 }
 
 struct InlineNoticeView: View {
+    private static let powerIconWidth: CGFloat = 48
+    private static let powerSpacing: CGFloat = 8
+    private static let percentageWidth = ceil(("100%" as NSString).size(withAttributes: [
+        .font: NSFont.monospacedDigitSystemFont(ofSize: 16, weight: .semibold)
+    ]).width) + 2
+
+    static func powerTrailingWidth(hasPercentage: Bool) -> CGFloat {
+        powerIconWidth + (hasPercentage ? percentageWidth + powerSpacing : 0)
+    }
+
     var notice: DeviceNotice
     @ObservedObject var model: NotchModel
     var cameraWidth: CGFloat
@@ -1210,14 +1384,25 @@ struct InlineNoticeView: View {
             Color.clear.frame(width: cameraWidth, height: height)
             Group {
                 if notice.kind.isPower {
-                    HStack(spacing: 8) {
-                        if let battery = notice.battery { Text("\(Int(battery * 100))%").font(.system(size: 16, weight: .semibold)).monospacedDigit() }
-                        if notice.kind == .charging {
-                            ChargingBatteryGlyph(level: notice.battery).id(notice.id)
-                        } else {
-                            Image(systemName: "battery.25percent").font(.system(size: 28, weight: .medium))
+                    HStack(spacing: Self.powerSpacing) {
+                        if let battery = notice.battery {
+                            Text("\(Int((battery * 100).rounded()))%")
+                                .font(.system(size: 16, weight: .semibold))
+                                .monospacedDigit()
+                                .fixedSize()
+                                .frame(width: Self.percentageWidth, alignment: .trailing)
                         }
+                        Group {
+                            if notice.kind == .charging {
+                                ChargingBatteryGlyph(level: notice.battery).id(notice.id)
+                            } else {
+                                Image(systemName: "battery.25percent").font(.system(size: 28, weight: .medium))
+                            }
+                        }
+                        .frame(width: Self.powerIconWidth)
                     }.foregroundStyle(color)
+                } else if model.showsInlineAirPodsDetails, notice.airPodsArtwork != nil {
+                    AirPodsBatterySatellite(notice: notice, model: model, system: model.system, detailsOnly: true) { Color.clear }
                 } else if let battery = notice.battery {
                     ZStack {
                         Circle().stroke(color.opacity(0.22), lineWidth: 3)
@@ -1299,7 +1484,7 @@ struct MarqueeText: View {
                         Text(text).font(font).foregroundStyle(color).fixedSize().background {
                             GeometryReader { size in
                                 Color.clear.onAppear { textWidth = size.size.width }
-                                    .onChange(of: size.size.width) { _, width in textWidth = width; start = Date() }
+                                    .notchOnChange(of: size.size.width) { _, width in textWidth = width; start = Date() }
                             }
                         }
                         if canScroll { Text(text).font(font).foregroundStyle(color).fixedSize().accessibilityHidden(true) }
@@ -1320,7 +1505,7 @@ struct MarqueeText: View {
                     }
                 }
             }
-            .onChange(of: geometry.size.width) { _, _ in start = Date() }
-        }.frame(height: 19).clipped().accessibilityLabel(text).onChange(of: text) { _, _ in start = Date() }
+            .notchOnChange(of: geometry.size.width) { _, _ in start = Date() }
+        }.frame(height: 19).clipped().accessibilityLabel(text).notchOnChange(of: text) { _, _ in start = Date() }
     }
 }

@@ -9,9 +9,9 @@ import ObjectiveC
     @objc(setState:ofLayer:transitionSpeed:) func setState(_ state: NSObject?, of layer: CALayer, transitionSpeed: Float)
 }
 
-/// Reads the installed Apple animation in our process. No resource is copied or modified.
+/// Reads the skip animation from the installed OS or the local app bundle.
 @MainActor private final class NativeSkipPackage {
-    static let url = URL(fileURLWithPath: "/System/Library/PrivateFrameworks/NowPlayingUI.framework/Resources/ForwardBackward.caar")
+    static let systemRoot = URL(fileURLWithPath: "/System/Library/PrivateFrameworks/NowPlayingUI.framework/Resources", isDirectory: true)
     let root: CALayer
     let inkBounds: CGRect
     private let package: NSObject
@@ -40,7 +40,7 @@ import ObjectiveC
 
     init?() {
         let loadSelector = NSSelectorFromString("packageWithContentsOfURL:type:options:error:")
-        guard FileManager.default.isReadableFile(atPath: Self.url.path),
+        guard let url = NotchAnimationAssets.resolve("ForwardBackward.caar", systemRoot: Self.systemRoot),
               let packageClass = NSClassFromString("CAPackage"),
               let loadMethod = class_getClassMethod(packageClass, loadSelector),
               method_getNumberOfArguments(loadMethod) == 6,
@@ -50,7 +50,7 @@ import ObjectiveC
               class_getInstanceMethod(controllerClass, NSSelectorFromString("setState:ofLayer:transitionSpeed:")) != nil else { return nil }
         typealias Loader = @convention(c) (AnyObject, Selector, NSURL, NSString, NSDictionary?, UnsafeMutableRawPointer?) -> Unmanaged<AnyObject>?
         let load = unsafeBitCast(method_getImplementation(loadMethod), to: Loader.self)
-        guard let package = load(packageClass as AnyObject, loadSelector, Self.url as NSURL,
+        guard let package = load(packageClass as AnyObject, loadSelector, url as NSURL,
                                  "com.apple.coreanimation-archive", nil, nil)?.takeUnretainedValue() as? NSObject,
               package.responds(to: NSSelectorFromString("rootLayer")),
               let root = package.perform(NSSelectorFromString("rootLayer"))?.takeUnretainedValue() as? CALayer,

@@ -6,6 +6,7 @@ import NotchCore
 struct FlippingArtworkView: View {
     var image: NSImage?
     var identity: TrackIdentity?
+    var flipsBackward: Bool
     var size: CGFloat
     var radius: CGFloat
     var onPhase: ((String) -> Void)?
@@ -14,12 +15,14 @@ struct FlippingArtworkView: View {
     @State private var displayedIdentity: TrackIdentity?
     @State private var pendingImage: NSImage?
     @State private var pendingIdentity: TrackIdentity?
+    @State private var pendingBackward = false
     @State private var angle = 0.0
     @State private var turning = false
     @State private var turnTask: Task<Void, Never>?
 
-    init(image: NSImage?, identity: TrackIdentity?, size: CGFloat, radius: CGFloat, onPhase: ((String) -> Void)? = nil) {
+    init(image: NSImage?, identity: TrackIdentity?, flipsBackward: Bool, size: CGFloat, radius: CGFloat, onPhase: ((String) -> Void)? = nil) {
         self.image = image; self.identity = identity; self.size = size
+        self.flipsBackward = flipsBackward
         self.radius = radius
         self.onPhase = onPhase
         _displayedImage = State(initialValue: image)
@@ -31,9 +34,9 @@ struct FlippingArtworkView: View {
                 ArtworkFlipGlass(angle: angle, radius: radius)
             }
             .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), perspective: 0.65)
-            .onChange(of: identity) { _, _ in receive() }
-            .onChange(of: image.map(ObjectIdentifier.init)) { _, _ in receive() }
-            .onChange(of: reduceMotion) { _, value in if value { settle() } }
+            .notchOnChange(of: identity) { _, _ in receive() }
+            .notchOnChange(of: image.map(ObjectIdentifier.init)) { _, _ in receive() }
+            .notchOnChange(of: reduceMotion) { _, value in if value { settle() } }
             .onDisappear { turnTask?.cancel() }
     }
     private func receive() {
@@ -43,7 +46,7 @@ struct FlippingArtworkView: View {
         if let identity, let current = displayedIdentity, current.isSameTrack(as: identity), !turning {
             displayedImage = image; displayedIdentity = identity; return
         }
-        pendingIdentity = identity; pendingImage = image
+        pendingIdentity = identity; pendingImage = image; pendingBackward = flipsBackward
         guard !reduceMotion, displayedIdentity != nil, identity != nil else { settle(); return }
         if !turning { turn() }
     }
@@ -51,7 +54,8 @@ struct FlippingArtworkView: View {
         turning = true
         onPhase?("outgoing")
         turnTask?.cancel()
-        withAnimation(.easeIn(duration: 0.16)) { angle = -90 }
+        let outgoingAngle: Double = pendingBackward ? 90 : -90
+        withAnimation(.easeIn(duration: 0.16)) { angle = outgoingAngle }
         turnTask = Task { @MainActor in
             do {
                 try await Task.sleep(for: .milliseconds(160))
@@ -59,7 +63,7 @@ struct FlippingArtworkView: View {
                 var transaction = Transaction(); transaction.disablesAnimations = true
                 withTransaction(transaction) {
                     displayedImage = pendingImage; displayedIdentity = pendingIdentity
-                    pendingIdentity = nil; pendingImage = nil; angle = 90
+                    pendingIdentity = nil; pendingImage = nil; angle = -outgoingAngle
                 }
                 onPhase?("incoming")
                 // Give the new face one frame at its edge before returning it toward the viewer.
@@ -79,7 +83,9 @@ struct FlippingArtworkView: View {
         onPhase?("idle")
         var transaction = Transaction(); transaction.disablesAnimations = true
         withTransaction(transaction) {
-            displayedImage = image; displayedIdentity = identity
+            // Keep the last face behind the exit fade when playback vanishes.
+            if identity != nil { displayedImage = image }
+            displayedIdentity = identity
             pendingImage = nil; pendingIdentity = nil; angle = 0
         }
     }

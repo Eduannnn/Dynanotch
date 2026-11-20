@@ -3,15 +3,24 @@ import AVFoundation
 import SwiftUI
 import NotchCore
 
-/// Paths only: Apple's pairing movies remain in the installed macOS bundle.
+enum NotchAnimationAssets {
+    static let bundled = Bundle.main.resourceURL?.appendingPathComponent("BundledAnimations", isDirectory: true)
+    private static let bundledOnly = CommandLine.arguments.contains("--bundled-assets-only")
+
+    static func resolve(_ path: String, systemRoot: URL) -> URL? {
+        let local = bundled?.appendingPathComponent(path)
+        let system = bundledOnly ? nil : systemRoot.appendingPathComponent(path)
+        return [system, local].compactMap { $0 }.first { FileManager.default.isReadableFile(atPath: $0.path) }
+    }
+}
+
 @MainActor enum SystemAirPodsArtwork {
     static let root = URL(fileURLWithPath: "/System/Library/CoreServices/BluetoothUIService.app/Contents/Resources", isDirectory: true)
     static let playbackWatchdog: TimeInterval = 8
     private static var posters: [URL: NSImage] = [:]
 
     static func url(for artwork: AirPodsArtwork) -> URL? {
-        artwork.movieRelativePaths.lazy.map { root.appendingPathComponent($0) }
-            .first { FileManager.default.isReadableFile(atPath: $0.path) }
+        artwork.movieRelativePaths.lazy.compactMap { NotchAnimationAssets.resolve($0, systemRoot: root) }.first
     }
     static func url(for family: AirPodsFamily) -> URL? { url(for: AirPodsArtwork(family: family)) }
     static func cachedPoster(for artwork: AirPodsArtwork) -> NSImage? {
@@ -40,10 +49,14 @@ import NotchCore
         var result: [[String: Any]] = []
         for artwork in examples {
             let image = await poster(for: artwork)
+            let source = url(for: artwork)
+            let isBundled = NotchAnimationAssets.bundled.map { directory in
+                source?.path.hasPrefix(directory.path + "/") == true
+            } ?? false
             result.append(["family": artwork.family.rawValue, "productID": artwork.productID,
                            "colorID": artwork.colorID.map { $0 as Any } ?? NSNull(),
-                           "source": url(for: artwork)?.path ?? "unavailable", "frameDecoded": image != nil,
-                           "width": image?.size.width ?? 0, "height": image?.size.height ?? 0, "copiedIntoApp": false])
+                           "source": source?.path ?? "unavailable", "frameDecoded": image != nil,
+                           "width": image?.size.width ?? 0, "height": image?.size.height ?? 0, "copiedIntoApp": isBundled])
         }
         return result
     }
@@ -55,6 +68,7 @@ struct SystemAirPodsGlyph: View {
     var connected: Bool
     var size: CGFloat
     var playMovie = true
+    var loops = false
     var onPlaybackReady: (TimeInterval) -> Void = { _ in }
     var onPlaybackEnd: () -> Void = {}
     var onPlaybackFailure: () -> Void = {}
@@ -73,7 +87,7 @@ struct SystemAirPodsGlyph: View {
                 }
             }
             if playMovie, !reduceMotion, connected, !failed, let url = SystemAirPodsArtwork.url(for: artwork) {
-                PairingMovie(url: url, onReady: { duration in
+                PairingMovie(url: url, loops: loops, onReady: { duration in
                     playing = true
                     onPlaybackReady(duration)
                 }, onEnd: onPlaybackEnd, onFailure: {
@@ -86,13 +100,14 @@ struct SystemAirPodsGlyph: View {
         .frame(width: size, height: size).opacity(connected ? 1 : 0.4)
         .allowsHitTesting(false).accessibilityHidden(true)
         .task(id: artwork) { poster = await SystemAirPodsArtwork.poster(for: artwork) }
-        .onChange(of: artwork) { _, _ in playing = false; failed = false }
-        .onChange(of: reduceMotion) { _, _ in playing = false }
+        .notchOnChange(of: artwork) { _, _ in playing = false; failed = false }
+        .notchOnChange(of: reduceMotion) { _, _ in playing = false }
     }
 }
 
 private struct PairingMovie: NSViewRepresentable {
     var url: URL
+    var loops: Bool
     var onReady: (TimeInterval) -> Void
     var onEnd: () -> Void
     var onFailure: () -> Void
@@ -117,6 +132,7 @@ private struct PairingMovie: NSViewRepresentable {
         var failureObservation: NSKeyValueObservation?
         var playbackObservers: [NSObjectProtocol] = []
         var reportedReady = false
+        var loops = false
         func stop() {
             readyObservation = nil; failureObservation = nil
             playbackObservers.forEach { NotificationCenter.default.removeObserver($0) }
@@ -129,6 +145,7 @@ private struct PairingMovie: NSViewRepresentable {
     func makeNSView(context: Context) -> MovieView { MovieView(frame: .zero) }
     func updateNSView(_ view: MovieView, context: Context) {
         let state = context.coordinator
+        state.loops = loops
         guard state.url != url else { return }
         state.stop(); state.url = url
         let item = AVPlayerItem(url: url)
@@ -154,7 +171,14 @@ private struct PairingMovie: NSViewRepresentable {
         state.playbackObservers = [
             NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak state, weak player] _ in
                 guard let state, let player, state.player === player else { return }
-                onEnd()
+                if state.loops {
+                    player.seek(to: .zero) { [weak state, weak player] finished in
+                        DispatchQueue.main.async {
+                            guard finished, let state, let player, state.player === player else { return }
+                            player.play()
+                        }
+                    }
+                } else { onEnd() }
             },
             NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak state, weak player] _ in
                 guard let state, let player, state.player === player else { return }

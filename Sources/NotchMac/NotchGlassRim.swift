@@ -28,14 +28,15 @@ struct SpecularGlassRim<Surface: Shape, Edge: Shape>: View {
 
     var body: some View {
         ZStack {
-            edge.stroke(contrast == .increased ? Color(white: 0.4) : Color(red: 0.14, green: 0.14, blue: 0.16), lineWidth: 0.8)
             if #available(macOS 26.0, *), !reduceTransparency, !staticPreview {
                 // Sample the surrounding backdrop with system glass and expose only its edge.
                 Color.clear
                     .glassEffect(.regular, in: surface)
                     .mask(edge.stroke(lineWidth: 1.4))
-                    .opacity(0.30)
+                    .opacity(0.10)
             }
+            // Keep a consistent charcoal edge above the backdrop-dependent glass.
+            edge.stroke(contrast == .increased ? Color(white: 0.28) : Color(white: 0.11), lineWidth: 0.8)
             GeometryReader { proxy in
                 let center = UnitPoint(x: highlight.x, y: highlight.y)
                 let reach = max(20, min(140, proxy.size.width * 0.4))
@@ -46,7 +47,6 @@ struct SpecularGlassRim<Surface: Shape, Edge: Shape>: View {
                     .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: strength)
             }
         }
-            .opacity(contrast == .increased ? 1 : 0.8)
             .allowsHitTesting(false).accessibilityHidden(true)
     }
 }

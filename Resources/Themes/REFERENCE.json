@@ -1,0 +1,155 @@
+{
+  "bindings" : [
+    "{title}",
+    "{artist}",
+    "{elapsed}",
+    "{remaining}",
+    "{battery}",
+    "{volume}",
+    "{brightness}",
+    "{device}"
+  ],
+  "collapsedExample" : {
+    "layout" : {
+      "bubbleSize" : 30
+    },
+    "surface" : {
+      "hoverHeight" : 2,
+      "hoverWidth" : 8
+    },
+    "version" : 1
+  },
+  "editing" : "Save UTF-8 JSON. Files reload automatically. If any file is invalid, the entire last working theme stays active; Settings shows the filename and error. Null restores the built-in value; omit a field to inherit it.",
+  "elementOptions" : [
+    "visible",
+    "opacity",
+    "offsetX",
+    "offsetY",
+    "scale",
+    "rotation",
+    "width",
+    "height",
+    "padding",
+    "fontSize",
+    "fontWeight",
+    "color",
+    "backgroundColor",
+    "cornerRadius",
+    "shadowColor",
+    "shadowRadius",
+    "shadowX",
+    "shadowY",
+    "glyphWidth",
+    "glyphHeight"
+  ],
+  "elements" : [
+    "surface",
+    "artwork",
+    "title",
+    "artist",
+    "metadata",
+    "waveform",
+    "progress",
+    "elapsed",
+    "remaining",
+    "controls",
+    "previous",
+    "playPause",
+    "next",
+    "favorite",
+    "airplay",
+    "notice",
+    "osd",
+    "bubble.music",
+    "bubble.lock",
+    "bubble.airpods",
+    "bubble.charging",
+    "bubble.volume",
+    "airpods.details"
+  ],
+  "expandedExample" : {
+    "elements" : {
+      "next" : {
+        "scale" : 1.1000000000000001
+      },
+      "title" : {
+        "color" : "#FFFFFFFF",
+        "fontSize" : 17
+      }
+    },
+    "glass" : {
+      "dimming" : 0.20000000000000001,
+      "lensHeight" : 40,
+      "refraction" : 28
+    },
+    "layout" : {
+      "controlsSpacing" : 10
+    },
+    "surface" : {
+      "radius" : 36,
+      "width" : 430
+    },
+    "version" : 1
+  },
+  "files" : [
+    "global.json",
+    "idle.json",
+    "collapsed.json",
+    "expanded.json",
+    "peek.json",
+    "notice.json",
+    "osd.json",
+    "airpods.json",
+    "charging.json",
+    "volume.json",
+    "brightness.json",
+    "browser.json",
+    "locked.json",
+    "unlocking.json"
+  ],
+  "formatVersion" : 1,
+  "inheritance" : [
+    "global.json",
+    "presentation state",
+    "browser\/device\/OSD variant",
+    "unlocking",
+    "locked"
+  ],
+  "layerExamples" : [
+    {
+      "color" : "#FFFFFFFF",
+      "fontSize" : 14,
+      "height" : 24,
+      "text" : "{title}",
+      "width" : 250,
+      "x" : 20,
+      "y" : 80
+    },
+    {
+      "color" : "#FFD700FF",
+      "height" : 20,
+      "symbol" : "sparkles",
+      "width" : 20,
+      "x" : 280,
+      "y" : 60
+    }
+  ],
+  "layerFields" : [
+    "text",
+    "symbol",
+    "color",
+    "x",
+    "y",
+    "width",
+    "height",
+    "fontSize",
+    "cornerRadius",
+    "rotation",
+    "opacity"
+  ],
+  "layout" : "surface controls the animated outline. layout controls intrinsic artwork placement, text\/transport spacing, progress padding, bubbles, and waveform bar geometry. elements applies final per-part transforms. Custom layers are noninteractive decoration inside the notch and never alter playback actions.",
+  "motion" : "response\/damping drives the interruptible surface spring. bubbleResponse\/bubbleDamping drives satellites. fadeDuration controls content fading. Reduce Motion and Reduce Transparency remain respected.",
+  "reset" : "Restore the bundled JSON templates or remove the edited files and relaunch Dynanotch. Your preferences, permissions, and media integrations are separate from theme files.",
+  "symbols" : "Map symbol names to SF Symbols strings; null keeps the native automatic symbol\/vector animation. Available names are listed in global.json.",
+  "units" : "Positions and sizes are points. Colors use #RRGGBB or #RRGGBBAA. Opacity is 0–1. Surface width includes the camera clearance; height cannot be smaller than the physical notch."
+}

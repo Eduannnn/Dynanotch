@@ -179,7 +179,7 @@ public struct NoticeQueue: Sendable {
     public init() {}
 
     @discardableResult public mutating func enqueue(_ notice: DeviceNotice) -> Bool {
-        let last = pending.last ?? current
+        let last = pending.last(where: { $0.key == notice.key }) ?? current
         if last?.key == notice.key && last?.connected == notice.connected {
             updateBattery(key: notice.key, level: notice.battery)
             updateArtwork(key: notice.key, artwork: notice.airPodsArtwork)
@@ -193,9 +193,13 @@ public struct NoticeQueue: Sendable {
     }
 
     public mutating func advance() { current = pending.isEmpty ? nil : pending.removeFirst() }
-    public mutating func expire(id: DeviceNotice.ID) {
+    public mutating func expire(id: DeviceNotice.ID, promoting companion: DeviceNotice.ID? = nil) {
         if current?.id == id {
-            advance()
+            if let companion, let index = pending.firstIndex(where: { $0.id == companion }) {
+                current = pending.remove(at: index)
+            } else {
+                advance()
+            }
         } else if let index = pending.firstIndex(where: { $0.id == id }) {
             pending.remove(at: index)
         }

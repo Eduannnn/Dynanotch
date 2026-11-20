@@ -4,8 +4,8 @@ import SwiftUI
 @MainActor final class Preferences: ObservableObject {
     private let defaults: UserDefaults
     @Published var showOnLockScreen: Bool { didSet { defaults.set(showOnLockScreen, forKey: "showOnLockScreen") } }
-    @Published var expandOnHover: Bool { didSet { defaults.set(expandOnHover, forKey: "expandOnHover") } }
     @Published var hideMenuBarIcon: Bool { didSet { defaults.set(hideMenuBarIcon, forKey: "hideMenuBarIcon") } }
+    @Published var liquidGlass: Bool { didSet { defaults.set(liquidGlass, forKey: "liquidGlass") } }
     @Published var artworkTint: Bool { didSet { defaults.set(artworkTint, forKey: "artworkTint") } }
     @Published var showNotices: Bool { didSet { defaults.set(showNotices, forKey: "showNotices") } }
     @Published var showOSD: Bool { didSet { defaults.set(showOSD, forKey: "showOSD") } }
@@ -21,9 +21,9 @@ import SwiftUI
         self.defaults = defaults
         let stored = defaults
         func flag(_ key: String, fallback: Bool = true) -> Bool { stored.object(forKey: key) as? Bool ?? fallback }
-        expandOnHover = flag("expandOnHover")
         showOnLockScreen = flag("showOnLockScreen")
         hideMenuBarIcon = flag("hideMenuBarIcon", fallback: false)
+        liquidGlass = flag("liquidGlass", fallback: false)
         artworkTint = flag("artworkTint")
         showNotices = flag("showNotices")
         showOSD = flag("showOSD")
@@ -48,6 +48,13 @@ struct DisplayGeometry {
     let centerX: CGFloat
     var hasHardwareNotch: Bool { screen.safeAreaInsets.top > 0 }
 
+    private static func inferredNotchHeight(on screen: NSScreen) -> CGFloat? {
+        if screen.safeAreaInsets.top > 0 { return screen.safeAreaInsets.top }
+        let menuBarHeight = screen.frame.maxY - screen.visibleFrame.maxY
+        // A virtual display can report the taller menu bar without a camera safe area.
+        return (34...43).contains(menuBarHeight) ? menuBarHeight : nil
+    }
+
     @MainActor static func resolve(_ preferences: Preferences) -> DisplayGeometry? {
         let screens = NSScreen.screens
         let preferred = screens.first { $0.displayID == preferences.selectedDisplay }
@@ -59,7 +66,9 @@ struct DisplayGeometry {
         let rightWidth = screen.auxiliaryTopRightArea?.width
         let detectedWidth = leftWidth.flatMap { left in rightWidth.map { screen.frame.width - left - $0 } } ?? 180
         let width = preferences.manualGeometry ? min(400, max(100, preferences.cameraWidth)) : max(100, detectedWidth)
-        let height = preferences.manualGeometry ? min(64, max(screen.safeAreaInsets.top, preferences.cameraHeight)) : max(32, screen.safeAreaInsets.top)
+        let menuBarHeight = screen.frame.maxY - screen.visibleFrame.maxY
+        let automaticHeight = inferredNotchHeight(on: screen) ?? ((20...30).contains(menuBarHeight) ? menuBarHeight : 24)
+        let height = preferences.manualGeometry ? min(64, max(screen.safeAreaInsets.top, preferences.cameraHeight)) : automaticHeight
         let center = leftWidth.map { screen.frame.minX + $0 + detectedWidth / 2 } ?? screen.frame.midX
         let offset = preferences.manualGeometry ? min(240, max(-240, preferences.horizontalOffset)) : 0
         return .init(screen: screen, cameraWidth: width, cameraHeight: height, centerX: center + offset)
