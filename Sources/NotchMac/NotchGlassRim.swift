@@ -26,7 +26,11 @@ struct SpecularGlassRim<Surface: Shape, Edge: Shape>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
 
-    var body: some View {
+    @ViewBuilder var body: some View {
+        if #available(macOS 26.0, *) { material }
+    }
+
+    private var material: some View {
         ZStack {
             if #available(macOS 26.0, *), !reduceTransparency, !staticPreview {
                 // Sample the surrounding backdrop with system glass and expose only its edge.
