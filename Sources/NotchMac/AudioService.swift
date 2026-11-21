@@ -203,7 +203,7 @@ struct AudioOutput: Identifiable, Hashable {
     func refreshNow() { refresh() }
     @discardableResult func adjust(_ value: Double) -> Bool {
         guard available else { return false }
-        let target = max(0.01, unit(value))
+        let target = unit(value)
         guard set?(display == 0 ? CGMainDisplayID() : display, Float(target)) == 0 else { return false }
         refresh()
         return true

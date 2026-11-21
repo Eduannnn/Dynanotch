@@ -33,6 +33,16 @@ import UserNotifications
         let args = ProcessInfo.processInfo.arguments
         if let index = args.firstIndex(of: "--verify-progress-bars"), args.indices.contains(index + 1) {
             verificationOnly = true
+            let model = NotchModel()
+            model.media.stop(); model.cameraWidth = 208; model.cameraHeight = 37.5
+            model.showOSD(.init(kind: .brightness, level: 0.0625, muted: false))
+            let full = ImageRenderer(content: NotchRootView(model: model).environment(\.staticNotchPreview, true)
+                .frame(width: NotchRootView.canvasWidth, height: 100, alignment: .top).clipped())
+            full.scale = 2
+            if let image = full.nsImage, let data = image.tiffRepresentation,
+               let bitmap = NSBitmapImageRep(data: data), let png = bitmap.representation(using: .png, properties: [:]) {
+                try? png.write(to: URL(fileURLWithPath: args[index + 1] + ".notch.png"))
+            }
             let renderer = ImageRenderer(content: ProgressBarVisualCheck())
             renderer.scale = 2
             if let image = renderer.nsImage, let data = image.tiffRepresentation,

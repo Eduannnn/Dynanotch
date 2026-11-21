@@ -597,30 +597,21 @@ private struct NotchProgressTrack: View {
     var backgroundOpacity = 0.2
 
     var body: some View {
-        Capsule(style: .circular).fill(.white.opacity(backgroundOpacity))
-            .overlay { NotchProgressFill(level: level).fill(tint) }
-            .clipShape(Capsule(style: .circular))
-    }
-}
-
-private struct NotchProgressFill: Shape {
-    var level: Double
-
-    var animatableData: Double {
-        get { level }
-        set { level = newValue }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        let progress = unit(level)
-        guard progress > 0, !rect.isEmpty else { return Path() }
-        // Map progress across the usable distance between round end caps.
-        // Every nonzero level has a visible cap and still moves continuously.
-        let cap = min(rect.height, rect.width)
-        let width = cap + (rect.width - cap) * progress
-        let height = min(rect.height, width)
-        let fill = CGRect(x: rect.minX, y: rect.midY - height / 2, width: width, height: height)
-        return Capsule(style: .circular).path(in: fill)
+        GeometryReader { geometry in
+            let progress = unit(level)
+            // Keep the fill proportional to the reading; adding an end cap to
+            // every value would overstate low levels. A one-point dot is only
+            // needed when a nonzero reading would otherwise be subpixel-sized.
+            let width = progress > 0 ? min(geometry.size.width, max(1, geometry.size.width * progress)) : 0
+            let height = min(geometry.size.height, width)
+            Capsule(style: .circular).fill(.white.opacity(backgroundOpacity))
+                .overlay(alignment: .leading) {
+                    Capsule(style: .circular).fill(tint)
+                        .frame(width: width, height: height)
+                        .clipped()
+                }
+                .clipShape(Capsule(style: .circular))
+        }
     }
 }
 
