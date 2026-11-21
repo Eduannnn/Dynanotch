@@ -599,6 +599,7 @@ private struct NotchProgressTrack: View {
     var body: some View {
         Capsule(style: .circular).fill(.white.opacity(backgroundOpacity))
             .overlay { NotchProgressFill(level: level).fill(tint) }
+            .clipShape(Capsule(style: .circular))
     }
 }
 
@@ -613,8 +614,11 @@ private struct NotchProgressFill: Shape {
     func path(in rect: CGRect) -> Path {
         let progress = unit(level)
         guard progress > 0, !rect.isEmpty else { return Path() }
+        // Below one cap diameter, grow a centered circle rather than a tall,
+        // squeezed capsule. Width stays proportional, including the last levels.
         let width = rect.width * progress
-        let fill = CGRect(x: rect.minX, y: rect.minY, width: width, height: rect.height)
+        let height = min(rect.height, width)
+        let fill = CGRect(x: rect.minX, y: rect.midY - height / 2, width: width, height: height)
         return Capsule(style: .circular).path(in: fill)
     }
 }
