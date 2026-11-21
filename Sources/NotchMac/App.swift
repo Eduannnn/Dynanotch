@@ -31,6 +31,16 @@ import UserNotifications
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let args = ProcessInfo.processInfo.arguments
+        if let index = args.firstIndex(of: "--verify-progress-bars"), args.indices.contains(index + 1) {
+            verificationOnly = true
+            let renderer = ImageRenderer(content: ProgressBarVisualCheck())
+            renderer.scale = 2
+            if let image = renderer.nsImage, let data = image.tiffRepresentation,
+               let bitmap = NSBitmapImageRep(data: data), let png = bitmap.representation(using: .png, properties: [:]) {
+                try? png.write(to: URL(fileURLWithPath: args[index + 1]))
+            }
+            NSApp.terminate(nil); return
+        }
         if let index = args.firstIndex(of: "--verify-notchless"), args.indices.contains(index + 1) {
             verificationOnly = true; AppVerification.runNotchless(directory: args[index + 1]); return
         }

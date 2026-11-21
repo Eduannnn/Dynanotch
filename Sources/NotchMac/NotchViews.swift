@@ -614,9 +614,10 @@ private struct NotchProgressFill: Shape {
     func path(in rect: CGRect) -> Path {
         let progress = unit(level)
         guard progress > 0, !rect.isEmpty else { return Path() }
-        // Below one cap diameter, grow a centered circle rather than a tall,
-        // squeezed capsule. Width stays proportional, including the last levels.
-        let width = rect.width * progress
+        // Map progress across the usable distance between round end caps.
+        // Every nonzero level has a visible cap and still moves continuously.
+        let cap = min(rect.height, rect.width)
+        let width = cap + (rect.width - cap) * progress
         let height = min(rect.height, width)
         let fill = CGRect(x: rect.minX, y: rect.midY - height / 2, width: width, height: height)
         return Capsule(style: .circular).path(in: fill)
@@ -1529,5 +1530,19 @@ struct MarqueeText: View {
             }
             .notchOnChange(of: geometry.size.width) { _, _ in start = Date() }
         }.frame(height: 19).clipped().accessibilityLabel(text).notchOnChange(of: text) { _, _ in start = Date() }
+    }
+}
+
+struct ProgressBarVisualCheck: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            ForEach([0.0, 0.001, 0.01, 0.025, 0.05, 0.1, 0.5, 1.0], id: \.self) { level in
+                HStack(spacing: 24) {
+                    Text(String(format: "%.1f%%", level * 100)).monospacedDigit().frame(width: 64, alignment: .trailing)
+                    NotchProgressTrack(level: level, tint: .white).frame(width: 55, height: 6)
+                    NotchProgressTrack(level: level, tint: .cyan).frame(width: 220, height: 4)
+                }
+            }
+        }.padding(30).background(.black).foregroundStyle(.white)
     }
 }
