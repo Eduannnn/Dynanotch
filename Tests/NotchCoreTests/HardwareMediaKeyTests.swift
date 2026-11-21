@@ -44,6 +44,8 @@ final class HardwareMediaKeyTests: XCTestCase {
         XCTAssertEqual(hardwareLevelStep(0.5, increasing: false, fine: true), 0.484375)
         XCTAssertEqual(hardwareLevelStep(0.99, increasing: true, fine: false), 1)
         XCTAssertEqual(hardwareLevelStep(0.01, increasing: false, fine: false), 0)
+        XCTAssertEqual(hardwareLevelStep(1.0 / 16 + 0.002, increasing: false, fine: false), 0)
+        XCTAssertEqual(hardwareLevelStep(1.0 / 64 + 0.002, increasing: false, fine: true), 0)
     }
 
     func testFourFineVolumeStepsReachZeroDespiteDeviceReadbackRounding() {

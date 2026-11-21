@@ -12,10 +12,6 @@ struct SystemOSD: Equatable {
     var kind: Kind
     var level: Double
     var muted: Bool
-    var symbol: String {
-        if kind == .brightness { return "sun.max.fill" }
-        return muted || level == 0 ? "speaker.slash.fill" : level < 0.34 ? "speaker.wave.1.fill" : level < 0.67 ? "speaker.wave.2.fill" : "speaker.wave.3.fill"
-    }
     var label: String { muted ? "Muted" : "\(Int(unit(level) * 100))%" }
 }
 
@@ -174,50 +170,37 @@ struct SystemOSD: Equatable {
     static var chargePillWidth: CGFloat { satelliteSize }
     @Published var chargePillLighting = EdgeLighting()
     var volumePillExtraOffset: CGFloat {
-        trailingCharge == nil ? 0 : bubbleSize + bubbleGap
+        trailingCharge != nil || lockScreenNotice != nil ? bubbleSize + bubbleGap : 0
     }
 
     var trailingVolume: SystemOSD? {
-        guard let osd, osd.kind == .volume, !showsLockLayout, compactVolume == nil,
-              musicHasConnectionNotice || pairedConnectionNotices != nil || showsMediaBubble(for: basePresentation) else { return nil }
-        return osd
+        guard let osd else { return nil }
+        let base = basePresentation
+        if base == .notice || (base != .expanded && showsLockLayout && media.snapshot != nil) {
+            return osd
+        }
+        return nil
     }
-    var compactVolume: SystemOSD? {
-        guard let osd, osd.kind == .volume,
-              media.snapshot?.isPlaying == true, basePresentation == .collapsed else { return nil }
-        return osd
-    }
-    static var volumePillWidth: CGFloat { satelliteSize }
-    static var volumePillHeight: CGFloat { satelliteSize }
+    var volumePillWidth: CGFloat { max(86, bubbleSize) }
     static var volumePillGap: CGFloat { max(2, min(80, NotchThemeStore.shared.theme(state: "collapsed").number("layout.bubbleGap", 8))) }
     @Published var volumePillLighting = EdgeLighting()
-    var preservesMediaArtwork: Bool {
-        osd?.kind == .volume && trailingVolume == nil && media.snapshot?.isPlaying == true
-    }
     let compactLeadingWidth: CGFloat = 38
-    var compactTrailingWidth: CGFloat { compactVolume == nil ? 38 : osdTrailingWidth }
+    let compactTrailingWidth: CGFloat = 38
     var collapsedHeight: CGFloat { cameraHeight + 0.5 }
-    var osdLeadingWidth: CGFloat { preservesMediaArtwork ? compactLeadingWidth : 46 }
+    let osdLeadingWidth: CGFloat = 46
     var osdTrailingWidth: CGFloat { 55 + 22 }
     var showsLockBubble: Bool { showsLockLayout && media.snapshot != nil }
     var showsMediaBubble: Bool {
-        if showsLockLayout { return false }
-        if presentation == .osd && preservesMediaArtwork { return false }
-        return showsMediaBubble(for: presentation)
-    }
-    // Base bubble selection is independent of volume overlay placement.
-    private func showsMediaBubble(for presentation: Presentation) -> Bool {
-        media.snapshot != nil && (presentation == .notice || presentation == .osd)
+        guard !showsLockLayout, media.snapshot != nil else { return false }
+        return presentation == .notice || presentation == .osd
     }
 
+    var expandedOSD: SystemOSD? { presentation == .expanded ? osd : nil }
+
     var presentation: Presentation {
-        if showsLockLayout && media.snapshot == nil { return osd == nil ? .idle : .osd }
-        if compactVolume != nil { return .collapsed }
-        if osd != nil && trailingVolume == nil {
-            if preservesMediaArtwork && (hovering || pinned || scrubbing) { return .expanded }
-            return .osd
-        }
-        return basePresentation
+        let base = basePresentation
+        if base != .expanded && osd != nil && trailingVolume == nil { return .osd }
+        return base
     }
 
     private var basePresentation: Presentation {
@@ -371,7 +354,6 @@ struct SystemOSD: Equatable {
         }.store(in: &subscriptions)
         audio.$selectedDevice.dropFirst().removeDuplicates().sink { [weak self] _ in self?.waveform.restartIfActive() }.store(in: &subscriptions)
         audio.onVolumeChanged = { [weak self] level, muted in self?.showOSD(.init(kind: .volume, level: level, muted: muted)) }
-        brightness.onChanged = { [weak self] level in self?.showOSD(.init(kind: .brightness, level: level, muted: false)) }
         mediaKeys.perform = { [weak self] key, fine in self?.handleHardwareKey(key, fine: fine) ?? false }
         system.onNotice = { [weak self] notice in self?.enqueue(notice) }
         system.onArtworkUpdated = { [weak self] key, artwork in self?.notices.updateArtwork(key: key, artwork: artwork) }
@@ -416,11 +398,11 @@ struct SystemOSD: Equatable {
             audio.refreshNow()
             let nextVolume = hardwareVolumeStep(audio.volumeForStepping, increasing: key == .volumeUp, fine: fine)
             guard audio.setVolume(nextVolume) else { return false }
-            showOSD(.init(kind: .volume, level: audio.volume, muted: audio.muted))
+            showOSD(.init(kind: .volume, level: audio.volumeForStepping, muted: audio.muted))
         case .mute:
             audio.refreshNow()
-            guard audio.setMuted(!audio.muted) else { return false }
-            showOSD(.init(kind: .volume, level: audio.volume, muted: audio.muted))
+            guard audio.setMuted(!audio.explicitlyMuted) else { return false }
+            showOSD(.init(kind: .volume, level: audio.volumeForStepping, muted: audio.muted))
         case .brightnessUp, .brightnessDown:
             brightness.refreshNow()
             guard brightness.available, brightness.adjust(hardwareLevelStep(brightness.level, increasing: key == .brightnessUp, fine: fine)) else { return false }
@@ -545,7 +527,7 @@ struct SystemOSD: Equatable {
     private func updateNoticeTimer() {
         noticeTimer?.invalidate()
         noticeTimer = nil
-        guard let current = notices.current, showsLockLayout || osd == nil || compactVolume != nil || trailingVolume != nil else {
+        guard let current = notices.current, showsLockLayout || osd == nil || musicHasConnectionNotice || trailingVolume != nil else {
             noticeDeadlines.removeAll()
             return
         }

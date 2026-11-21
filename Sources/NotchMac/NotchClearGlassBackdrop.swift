@@ -120,8 +120,7 @@ final class NotchClearGlassView: NSView {
             imp(sdfLayerInstance, selSmooth, 38.0)
         }
 
-        // 2. SDF Shape Element: Inset by topRadius on both sides to align with NotchShape vertical walls.
-        // In native AppKit coordinates (y=0 at bottom), cornerRadius rounds the bottom corners!
+        // Inset the optical shape by the top radius to follow the notch walls.
         let sdfElementInstance = sdfElementClass.init()
         let contentWidth = max(bounds.width - topRadius * 2, 0)
         sdfElementInstance.frame = CGRect(x: topRadius, y: 0, width: contentWidth, height: bounds.height)
@@ -154,8 +153,7 @@ final class NotchClearGlassView: NSView {
         sdfElement.contentsScale = scale
         backdrop.frame = bounds
         sdfLayer.frame = bounds
-        let contentWidth = max(bounds.width - topRadius * 2, 0)
-        sdfElement.frame = CGRect(x: topRadius, y: 0, width: contentWidth, height: bounds.height)
+        sdfElement.frame = contentFrame
         sdfElement.cornerRadius = bottomRadius
         backdrop.setNeedsDisplay()
         sdfLayer.setNeedsDisplay()
@@ -243,7 +241,7 @@ final class NotchClearGlassView: NSView {
 // MARK: - SwiftUI Representable
 
 struct NotchClearGlassBackdrop: NSViewRepresentable {
-    var refraction: Double = 30
+    var refraction: Double = 42
     var lensHeight: Double = 44
     var blur: Double = 0
     var dispersion: Double = 1.8

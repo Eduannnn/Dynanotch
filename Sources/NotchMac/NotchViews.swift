@@ -57,7 +57,7 @@ private struct NotchSurfaceBackground: View {
         ZStack(alignment: .top) {
             shape.fill(theme.color("surface.backgroundColor", .notchSurface)).opacity(1 - progress)
             if liquidGlass && !reduceTransparency && NotchClearGlassView.isSupported {
-                NotchClearGlassBackdrop(refraction: max(0, min(100, theme.number("glass.refraction", 30))),
+                NotchClearGlassBackdrop(refraction: max(0, min(100, theme.number("glass.refraction", 42))),
                     lensHeight: max(1, min(100, theme.number("glass.lensHeight", 44))), blur: max(0, min(30, theme.number("glass.blur", 0))),
                     dispersion: max(0, min(15, theme.number("glass.dispersion", 1.8))), topRadius: surface.ear, bottomRadius: surface.radius)
                     // Sample beyond the visible edge; trim the filtered surface afterward.
@@ -103,12 +103,8 @@ struct NotchRootView: View {
         let surface = staticPreview ? model.surfaceTarget : motion.surface
         let playing = model.media.snapshot?.isPlaying == true
         let expanded = model.presentation == .expanded
-        let compactVolume = model.compactVolume
-        let expandedVolume = expanded && model.preservesMediaArtwork ? model.osd : nil
-        let waveformVisible = compactVolume == nil && model.media.snapshot != nil
-            && [.collapsed, .peek, .expanded].contains(model.presentation)
-        let mediaVisible = model.media.snapshot != nil && ([.collapsed, .peek, .expanded].contains(model.presentation)
-            || model.preservesMediaArtwork || model.showsMediaBubble)
+        let waveformVisible = model.media.snapshot != nil && [.collapsed, .peek, .expanded].contains(model.presentation)
+        let mediaVisible = waveformVisible || model.showsMediaBubble
         let left = (Self.canvasWidth - surface.width) / 2 + surface.offset
         let right = left + surface.width
         let satelliteY = max(0, (model.collapsedHeight - model.bubbleSize) / 2)
@@ -141,21 +137,25 @@ struct NotchRootView: View {
             .allowsHitTesting(false)
 
             BubbleSatellite(model: model, kind: .volume, item: model.trailingVolume,
-                            lane: .init(edge: right, y: satelliteY, width: model.bubbleSize,
+                            lane: .init(edge: right, y: satelliteY, width: model.volumePillWidth,
                                         side: .trailing, occupiedWidth: model.volumePillExtraOffset)) { volume in
                 Capsule().fill(model.theme.element("bubble.volume").color("backgroundColor", .notchSurface))
                     .overlay {
-                        NotchVolumeBar(osd: volume, showsMuteMark: true, width: model.bubbleSize - 12)
-                            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: volume)
+                        HStack(spacing: 7) {
+                            osdIcon(volume, size: 13)
+                                .frame(width: 16)
+                            NotchVolumeBar(osd: volume, width: 43)
+                        }
                     }
                     .overlay {
                         SpecularGlassRim(surface: Capsule(), edge: Capsule(),
                                          highlight: model.volumePillLighting.point,
                                          strength: model.volumePillLighting.strength, staticPreview: staticPreview)
                     }
-                    .frame(width: model.bubbleSize, height: model.bubbleSize)
+                    .frame(width: model.volumePillWidth, height: model.bubbleSize)
                     .themed("bubble.volume")
-                    .accessibilityLabel("Volume")
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(volume.kind == .volume ? "Volume" : "Brightness")
                     .accessibilityValue(volume.label)
             }
             .allowsHitTesting(false)
@@ -243,24 +243,46 @@ struct NotchRootView: View {
                         .opacity(waveformVisible ? 1 : 0)
                         .animation(IslandMotion.fade, value: waveformVisible)
                         .allowsHitTesting(false)
-                    if let volume = compactVolume ?? expandedVolume {
-                        let expandedCenter = (model.cameraWidth + model.osdTrailingWidth) / 2
-                        let insideEdge = (surface.width - NotchVolumeBar.standardWidth) / 2 - 4
-                        let x = expandedVolume == nil ? surface.width - surface.waveformInset
-                            : surface.width / 2 + min(expandedCenter, insideEdge)
-                        NotchVolumeBar(osd: volume, showsMuteMark: true,
-                                       width: expandedVolume == nil ? NotchVolumeBar.standardWidth : 47)
-                            .position(x: x, y: model.cameraHeight / 2)
-                            .animation(reduceMotion ? nil : IslandMotion.shape, value: volume.level)
-                            .accessibilityLabel("Volume")
-                            .accessibilityValue(volume.label)
-                            .transition(.opacity)
-                            .allowsHitTesting(false)
-                    }
+
                 }
                 .padding(.horizontal, surface.ear)
                 .clipShape(NotchSilhouette(radius: surface.radius, ear: surface.ear, floating: !model.hasHardwareNotch))
 
+                if expanded {
+                    Button { model.close() } label: {
+                        Color.clear
+                            .frame(width: surface.width, height: model.cameraHeight)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Collapse player")
+                }
+
+                ZStack {
+                    if let osd = model.expandedOSD {
+                        let rowY = model.cameraHeight / 2
+                        let artworkTop = surface.artworkY - surface.artworkSize / 2
+                        let leadingSpace = model.hasHardwareNotch
+                            ? (surface.width - model.cameraWidth) / 2 - surface.offset
+                            : surface.artworkX + surface.artworkSize / 2
+                        let iconX = max(12, leadingSpace / 2) + 3
+                        let iconY = max(10, min(artworkTop / 2, rowY - 2))
+                        ZStack(alignment: .topLeading) {
+                            osdIcon(osd, size: 16)
+                                .position(x: iconX, y: iconY)
+                            NotchVolumeBar(osd: osd, width: 47)
+                                .position(x: surface.width - surface.artworkX, y: rowY)
+                        }
+                        .frame(width: surface.width, height: model.cameraHeight)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(osd.kind == .volume ? "Volume" : "Brightness")
+                        .accessibilityValue(osd.label)
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: -3)))
+                    }
+                }
+                .frame(width: surface.width, height: model.cameraHeight)
+                .allowsHitTesting(false)
+                .animation(staticPreview ? nil : IslandMotion.fade, value: model.expandedOSD != nil)
             }
             .frame(width: surface.width + 2 * surface.ear, height: surface.height, alignment: .top)
             .offset(x: (Self.canvasWidth - surface.width) / 2 + surface.offset - surface.ear)
@@ -402,24 +424,49 @@ struct NotchRootView: View {
         case .osd:
             if let osd = model.osd {
                 HStack(spacing: 0) {
-                    if model.preservesMediaArtwork { Color.clear.frame(width: model.osdLeadingWidth) }
-                    else {
-                        let animatesSpeaker = osd.kind == .volume && model.media.snapshot == nil && !reduceMotion
-                        Image(systemName: model.theme.string(osd.kind == .brightness ? "symbols.brightness" : osd.muted ? "symbols.muted" : "symbols.volume", osd.symbol))
-                            .font(.system(size: 24, weight: .medium))
-                            .frame(width: model.osdLeadingWidth)
-                            .contentTransition(animatesSpeaker ? symbolReplaceTransition : .identity)
-                            .animation(animatesSpeaker ? .default.speed(1.25) : nil, value: osd.symbol)
-                    }
+                    osdIcon(osd, size: 24)
+                        .frame(width: model.osdLeadingWidth)
                     Color.clear.frame(width: model.cameraWidth)
-                    NotchVolumeBar(osd: osd, showsMuteMark: model.preservesMediaArtwork)
+                    NotchVolumeBar(osd: osd)
                         .frame(width: model.osdTrailingWidth)
-                        .animation(IslandMotion.shape, value: osd.level)
                 }.frame(height: model.cameraHeight).themed("osd").accessibilityElement(children: .ignore)
                     .accessibilityLabel(osd.kind == .volume ? "Volume" : "Brightness")
                     .accessibilityValue(osd.label)
             }
         }
+    }
+
+    private func osdIcon(_ osd: SystemOSD, size: CGFloat) -> some View {
+        let level = unit(osd.level)
+        let isBrightness = osd.kind == .brightness
+        let isMuted = !isBrightness && (osd.muted || level == 0)
+        let themeKey = isBrightness ? "symbols.brightness" : isMuted ? "symbols.muted" : "symbols.volume"
+        let customSymbol = model.theme.value(themeKey) as? String
+        let animates = !reduceMotion && !staticPreview
+
+        return Group {
+            if isBrightness, customSymbol == nil {
+                let rayWidth = size * 0.09
+                let rayLength = level < 0.5 ? rayWidth : size * 0.18
+                ZStack {
+                    Circle().frame(width: size * 0.42, height: size * 0.42)
+                    ForEach(0..<8) { index in
+                        Capsule()
+                            .frame(width: rayWidth, height: rayLength)
+                            .offset(y: -size * 0.40)
+                            .rotationEffect(.degrees(Double(index) * 45))
+                    }
+                }
+                .frame(width: size, height: size)
+            } else {
+                Image(systemName: customSymbol ?? (isMuted ? "speaker.slash.fill" : "speaker.wave.3.fill"),
+                      variableValue: isBrightness || isMuted ? nil : level)
+                    .font(.system(size: size, weight: .medium))
+                    .contentTransition(animates ? .interpolate : .identity)
+            }
+        }
+        .frame(height: size * 1.25)
+        .animation(animates ? .easeInOut(duration: 0.14) : nil, value: level)
     }
 
     private var playerHeader: some View {
@@ -599,18 +646,18 @@ private struct NotchProgressTrack: View {
     var body: some View {
         GeometryReader { geometry in
             let progress = unit(level)
-            // Keep the fill proportional to the reading; adding an end cap to
-            // every value would overstate low levels. A one-point dot is only
-            // needed when a nonzero reading would otherwise be subpixel-sized.
-            let width = progress > 0 ? min(geometry.size.width, max(1, geometry.size.width * progress)) : 0
-            let height = min(geometry.size.height, width)
+            let trackWidth = geometry.size.width
+            let trackHeight = min(geometry.size.height, trackWidth)
+            let fillWidth = progress > 0 ? min(trackWidth, max(1, trackWidth * progress)) : 0
+            let fillHeight = min(trackHeight, fillWidth)
+            let leadingInset = (trackHeight - fillHeight) / 2
+
             Capsule(style: .circular).fill(.white.opacity(backgroundOpacity))
                 .overlay(alignment: .leading) {
                     Capsule(style: .circular).fill(tint)
-                        .frame(width: width, height: height)
-                        .clipped()
+                        .frame(width: fillWidth, height: fillHeight)
+                        .offset(x: leadingInset)
                 }
-                .clipShape(Capsule(style: .circular))
         }
     }
 }
@@ -618,21 +665,29 @@ private struct NotchProgressTrack: View {
 private struct NotchVolumeBar: View {
     static let standardWidth: CGFloat = 55
     let osd: SystemOSD
-    let showsMuteMark: Bool
     var width: CGFloat = NotchVolumeBar.standardWidth
-    private let height: CGFloat = 6
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        NotchProgressTrack(level: osd.muted ? 0 : osd.level, tint: .white)
-            .frame(width: width, height: height)
-            .overlay {
-                if showsMuteMark && osd.muted {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white)
-                        .accessibilityHidden(true)
-                }
+        let volume = osd.muted ? 0 : osd.level
+        GeometryReader { geometry in
+            let progress = min(max(volume, 0), 1)
+            let fillWidth = geometry.size.width * progress
+            let tipRadius = min(2.5, fillWidth / 2)
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(.white.opacity(0.2))
+
+                RoundedRectangle(cornerRadius: tipRadius, style: .circular)
+                    .fill(.white)
+                    .frame(width: fillWidth)
             }
+            .frame(height: 5)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: volume)
+        }
+        .frame(width: width, height: 5)
+
     }
 }
 
@@ -1527,10 +1582,10 @@ struct MarqueeText: View {
 struct ProgressBarVisualCheck: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            ForEach([0.0, 0.001, 0.01, 0.025, 0.05, 0.1, 0.5, 1.0], id: \.self) { level in
+            ForEach([0.0, 0.001, 1.0 / 64, 2.0 / 64, 1.0 / 16, 2.0 / 16, 0.5, 1.0], id: \.self) { level in
                 HStack(spacing: 24) {
                     Text(String(format: "%.1f%%", level * 100)).monospacedDigit().frame(width: 64, alignment: .trailing)
-                    NotchProgressTrack(level: level, tint: .white).frame(width: 55, height: 6)
+                    NotchVolumeBar(osd: .init(kind: .volume, level: level, muted: false))
                     NotchProgressTrack(level: level, tint: .cyan).frame(width: 220, height: 4)
                 }
             }

@@ -5,10 +5,12 @@ build_dir="${NOTCH_BUILD_DIR:-$project_root/.build}"
 app_path="${1:-$project_root/Build/Dynanotch.app}"
 local_assets="${DYNANOTCH_BUNDLE_SYSTEM_ASSETS:-1}"
 asset_path="$app_path/Contents/Resources/BundledAnimations"
-architecture_flags=(--arch arm64 --arch x86_64)
-if [[ "$local_assets" == 1 ]]; then
-    architecture_flags=(--arch arm64 --arch x86_64)
-elif [[ -e "$asset_path" ]]; then
+target_architecture="${DYNANOTCH_BUILD_ARCH:-$(uname -m)}"
+case "$target_architecture" in
+    arm64|x86_64) architecture_flags=(--arch "$target_architecture") ;;
+    *) echo "DYNANOTCH_BUILD_ARCH must be arm64 or x86_64." >&2; exit 1 ;;
+esac
+if [[ "$local_assets" != 1 && -e "$asset_path" ]]; then
     echo "Choose another output path. This app bundle contains locally copied system assets." >&2
     exit 1
 fi

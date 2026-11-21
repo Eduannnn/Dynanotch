@@ -40,12 +40,14 @@ struct AudioOutput: Identifiable, Hashable {
     private var timer: Timer?
     private var ticks = 0
     private var initialized = false
-    // A device can retain a nonzero scalar when mute is used to reach zero.
+    // Track mute applied by stepping down to zero separately from the mute key.
     private var zeroVolumeMuteReadback: Double?
 
     var volumeForStepping: Double {
         zeroVolumeMuteReadback == nil ? volume : 0
     }
+
+    var explicitlyMuted: Bool { muted && zeroVolumeMuteReadback == nil }
 
     var symbol: String {
         muted || volume == 0 ? "speaker.slash.fill" : volume < 0.34 ? "speaker.wave.1.fill" : volume < 0.67 ? "speaker.wave.2.fill" : "speaker.wave.3.fill"
@@ -109,13 +111,16 @@ struct AudioOutput: Identifiable, Hashable {
         }
         refresh()
         if value == 0 {
-            // Some outputs clamp the scalar above zero. Mute is a second way to reach silence.
-            let didMute = muted ? false : setMuted(true)
-            if muted || didMute {
-                zeroVolumeMuteReadback = volume > 0 ? volume : nil
-                message = ""
+            // Some routes still play at a zero scalar. Confirm mute when the
+            // output supports it and use zero as the baseline for the next step.
+            if !muted, setMuted(true), muted {
+                zeroVolumeMuteReadback = volume
             }
-            return succeeded || didMute || muted
+            if muted || (succeeded && volume == 0) {
+                message = ""
+                return true
+            }
+            return false
         }
         guard succeeded else { message = "This output controls its own volume."; return false }
         message = ""
@@ -128,7 +133,9 @@ struct AudioOutput: Identifiable, Hashable {
         var raw: UInt32 = value ? 1 : 0
         var address = audioAddress(kAudioDevicePropertyMute, scope: kAudioDevicePropertyScopeOutput)
         guard AudioObjectSetPropertyData(selectedDevice, &address, 0, nil, UInt32(MemoryLayout<UInt32>.size), &raw) == noErr else { message = "Mute is unavailable for this output."; return false }
+        zeroVolumeMuteReadback = nil
         refresh()
+        guard muted == value else { return false }
         message = ""
         return true
     }
@@ -173,9 +180,7 @@ struct AudioOutput: Identifiable, Hashable {
     private var get: GetBrightness?
     private var set: SetBrightness?
     private var timer: Timer?
-    private var initialized = false
     private var display: UInt32 = 0
-    var onChanged: ((Double) -> Void)?
 
     init() {
         handle = dlopen("/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices", RTLD_LAZY)
@@ -188,7 +193,7 @@ struct AudioOutput: Identifiable, Hashable {
         timer = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.refresh() } }
         timer?.tolerance = 0.1
     }
-    func useDisplay(_ id: UInt32) { if display != id { display = id; initialized = false; refresh() } }
+    func useDisplay(_ id: UInt32) { if display != id { display = id; refresh() } }
     private func refresh() {
         let target = display == 0 ? CGMainDisplayID() : display
         var value: Float = 0
@@ -196,9 +201,7 @@ struct AudioOutput: Identifiable, Hashable {
         if available != supported { available = supported }
         guard supported else { return }
         let next = unit(Double(value))
-        if initialized && abs(next - level) > 0.003 { onChanged?(next) }
         if level != next { level = next }
-        initialized = true
     }
     func refreshNow() { refresh() }
     @discardableResult func adjust(_ value: Double) -> Bool {

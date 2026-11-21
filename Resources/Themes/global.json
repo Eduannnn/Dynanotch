@@ -475,7 +475,7 @@
     "enabled": null,
     "fadeHeight": 90,
     "lensHeight": 44,
-    "refraction": 30,
+    "refraction": 42,
     "shadowOpacity": 0,
     "topOpacity": 1
   },

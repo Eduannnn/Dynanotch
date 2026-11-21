@@ -1,6 +1,6 @@
 # Dynanotch
 
-**Version 1.2.0 · Tested on macOS 27.3 beta**
+**Version 1.2.2 · Tested on macOS 27.3 beta**
 
 A SwiftUI and AppKit app that turns the MacBook camera notch into an interactive spot for media, device battery information, and system controls. Dynanotch draws its own interface. It runs without patches to macOS or changes to SIP.
 
@@ -12,9 +12,7 @@ Dynanotch brings a bit of the newer MacBooks’ Dynamic Island to your notch. On
 
 Download the precompiled Apple Silicon ZIP from the [latest release](https://github.com/Eduannnn/Dynanotch/releases/latest). The app is ad hoc signed and unnotarized. The ZIP includes a README with commands for signing your copy using your own Apple Development certificate. You can also build and sign it from source below.
 
-### Universal 2 and themes
-
-The v1.2.0 download includes **arm64 and x86_64 in one app**. Choose the Universal 2 ZIP for Apple Silicon or Intel. The precompiled app is ad-hoc signed; local signing instructions are included in the ZIP.
+### Themes
 
 JSON themes live in `~/Library/Application Support/Dynanotch/Themes`. Open them through **Settings → JSON themes → Open theme files**. `global.json` supplies shared defaults; collapsed, expanded, notice, AirPods, charging, OSD, browser, locked, and unlocking files override individual states. `REFERENCE.json` explains the element, layout, typography, glass, symbol, waveform, and animation controls. Changes reload automatically; malformed files retain the last working theme. Default templates are in `Resources/Themes`.
 
@@ -28,7 +26,7 @@ The player opens on click. Hovering produces a small swell. Optional expanded Li
 | --- | --- |
 | **macOS 27.3 beta (26C5035r)** | **Supported and tested** on an M2 MacBook Air. All 20 sampled AirPods artwork cases decoded, and the native skip animations loaded and played. |
 | macOS 27.2 | Unverified. AirPods movies and native skip animations need to be checked on that build before claiming support. |
-| macOS 14 Sonoma–15 Sequoia | Experimental. Universal 2 binaries target macOS 14.0; runtime testing on these versions is still needed. Older systems use compatible animation and black-surface fallbacks. |
+| macOS 14 Sonoma–15 Sequoia | Experimental. The binary targets macOS 14.0; runtime testing on these versions is still needed. Older systems use compatible animation and black-surface fallbacks. |
 | macOS 26 and newer | Liquid Glass can be enabled where supported. Full hardware testing beyond the listed tested system is still needed. |
 
 The app reads optional artwork and animations from the installed macOS. Missing resources fall back to SF Symbols. The release bundles AirPods pairing movies and native skip animations so older systems can use them without relying on newer system resources. Unsupported or unavailable resources still fall back to symbols. Live audio waveform capture requires macOS 14.4 or newer; it is unavailable on macOS 14.0–14.3.
@@ -95,7 +93,7 @@ cd Dynanotch
 open Build/Dynanotch.app
 ```
 
-The script builds a release app and verifies its signature. If you have several valid certificates, select one using `DYNANOTCH_SIGNING_IDENTITY` or the ignored `.signing-identity` file. Both take the certificate fingerprint.
+The script builds for your Mac’s architecture and verifies the signature. Set `DYNANOTCH_BUILD_ARCH=arm64` to explicitly select Apple Silicon. If you have several valid certificates, select one using `DYNANOTCH_SIGNING_IDENTITY` or the ignored `.signing-identity` file. Both take the certificate fingerprint.
 
 ### Option 2: Build in Xcode
 

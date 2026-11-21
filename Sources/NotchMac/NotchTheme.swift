@@ -202,7 +202,7 @@ struct NotchTheme {
             "surface": ["width": nullable, "height": nullable, "offsetX": nullable, "radius": nullable, "earRadius": nullable,
                 "backgroundColor": "#000000", "shadowOpacity": 0.32, "shadowRadius": 15, "shadowX": 0, "shadowY": 6,
                 "edgeHighlight": true, "hoverWidth": 6, "hoverHeight": 2],
-            "glass": ["enabled": nullable, "refraction": 30, "lensHeight": 44, "dispersion": 1.8, "blur": 0,
+            "glass": ["enabled": nullable, "refraction": 42, "lensHeight": 44, "dispersion": 1.8, "blur": 0,
                 "dimming": 0.25, "fadeHeight": 90, "topOpacity": 1, "edgeHighlight": false, "shadowOpacity": 0],
             "colors": ["accentColor": nullable, "secondaryColor": "#9EA1B0", "timeColor": nullable],
             "layout": ["artworkSize": nullable, "artworkX": nullable, "artworkY": nullable, "artworkRadius": nullable,

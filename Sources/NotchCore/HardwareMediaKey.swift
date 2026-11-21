@@ -36,18 +36,17 @@ public struct MediaKeyCapture {
     public mutating func reset() { pressed.removeAll() }
 }
 
+/// Move to the next tick in the requested direction. Devices can report a
+/// rounded scalar, so near-tick values are treated as already on that tick.
 public func hardwareLevelStep(_ current: Double, increasing: Bool, fine: Bool) -> Double {
-    unit(unit(current) + (increasing ? 1 : -1) / (fine ? 64 : 16))
-}
-
-/// Move to the next volume tick in the requested direction. Audio devices can
-/// report a rounded scalar after a write, so treat a read near a tick as that
-/// tick rather than carrying the rounding error into the next adjustment.
-public func hardwareVolumeStep(_ current: Double, increasing: Bool, fine: Bool) -> Double {
     let ticks = fine ? 64.0 : 16.0
     let level = unit(current)
     let nearest = (level * ticks).rounded()
     let aligned = abs(level - nearest / ticks) <= 0.003
     let next = aligned ? nearest + (increasing ? 1 : -1) : (increasing ? ceil(level * ticks) : floor(level * ticks))
     return unit(next / ticks)
+}
+
+public func hardwareVolumeStep(_ current: Double, increasing: Bool, fine: Bool) -> Double {
+    hardwareLevelStep(current, increasing: increasing, fine: fine)
 }

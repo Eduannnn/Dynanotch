@@ -1,3 +1,11 @@
+## v1.2.2 - hotfix
+
+- Volume and brightness animate into the expanded player, with the icon above the artwork and the bar on the right.
+- Volume uses variable speaker waves and reaches silence at zero. Brightness can reach zero in one step and shows dots or rays around the sun. Automatic brightness changes stay out of the notch.
+- In the collapsed notch, the artwork moves to a side bubble during volume changes.
+- Clicking the top of the expanded notch collapses it.
+- Stronger refraction in Liquid Glass mode.
+
 ## v1.2.0
 
 - Notchless display layout: smaller floating pill, continuous idle shrink-to-hidden transition, activity/hover restoration, and scaled click targets.
