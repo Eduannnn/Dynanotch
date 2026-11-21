@@ -47,7 +47,11 @@ Click the AirPods bubble to keep the pill open and see separate case, left, and 
 
 ![Expanded AirPods battery pill showing three separate battery readings beside the compact player and charging pill](docs/images/airpods-battery-details.png)
 
-Charging and volume can use their own trailing pill when the main notch is occupied. Volume changes during playback keep the artwork visible, and an × marks mute.
+When you change volume with the notch collapsed, the artwork moves into a side bubble. In the expanded player, the speaker or sun appears above the artwork and the level bar appears on the right. The speaker icon shows mute, and the sun’s dots stretch into rays as brightness increases. Automatic brightness adjustments stay out of the notch.
+
+| Expanded volume | Expanded brightness |
+| --- | --- |
+| ![Expanded player with the speaker icon above the artwork and volume bar on the right](docs/images/expanded-volume.png) | ![Expanded player with a dotted sun icon and brightness bar](docs/images/expanded-brightness.png) |
 
 ## How it fits around the camera
 
@@ -57,15 +61,17 @@ The dashed outlines mark the physical camera cutout. In compact mode, artwork an
 | --- | --- |
 | ![Compact layout with artwork and waveform on either side of the physical notch](docs/images/physical-notch-layout.png) | ![Expanded player with the physical notch directly above the song title](docs/images/physical-notch-expanded.png) |
 
+![Expanded Liquid Glass player refracting the wallpaper](docs/images/liquid-glass.png)
+
 The screenshots and demo use sample media, waveform levels, and battery readings.
 
 ## Use the notch
 
-- Hover over an active compact notch to expand it temporarily. Click to pin it open; press Escape or click outside to collapse.
+- Hover over the compact notch for a slight swell. Click to expand the player. Click its top strip or click outside to collapse it.
 - Open Settings from the menu-bar icon or by reopening Dynanotch from Applications. With Accessibility enabled, press **⌘,** while the pointer is over the notch.
 - In General settings, preview AirPods notices by model, choose a Max color, and simulate missing battery information. Preview readings are sample values and do not connect a device.
 
-![Animated preview of the player, cover flip, and liquid AirPods and charging bubbles](docs/images/dynanotch-motion.gif)
+![Animated preview of the player, cover flip, volume and brightness controls, and AirPods battery details](docs/images/dynanotch-motion.gif)
 
 ### Permissions
 
