@@ -3,14 +3,10 @@ set -euo pipefail
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
 build_dir="${NOTCH_BUILD_DIR:-$project_root/.build}"
 app_path="${1:-$project_root/Build/Dynanotch.app}"
-local_assets="${DYNANOTCH_BUNDLE_SYSTEM_ASSETS:-0}"
+local_assets="${DYNANOTCH_BUNDLE_SYSTEM_ASSETS:-1}"
 asset_path="$app_path/Contents/Resources/BundledAnimations"
 architecture_flags=(--arch arm64 --arch x86_64)
 if [[ "$local_assets" == 1 ]]; then
-    if [[ $# -eq 0 || -e "$app_path" ]]; then
-        echo "Use a new, explicit .app output path for the local universal build with bundled assets." >&2
-        exit 1
-    fi
     architecture_flags=(--arch arm64 --arch x86_64)
 elif [[ -e "$asset_path" ]]; then
     echo "Choose another output path. This app bundle contains locally copied system assets." >&2
@@ -38,7 +34,7 @@ if ! /usr/bin/security find-identity -v -p codesigning | /usr/bin/awk -v wanted=
     exit 1
 fi
 sdk_version="$(xcrun --show-sdk-version)"
-linker_flags=(-Xlinker -platform_version -Xlinker macos -Xlinker 13.0 -Xlinker "$sdk_version")
+linker_flags=(-Xlinker -platform_version -Xlinker macos -Xlinker 14.0 -Xlinker "$sdk_version")
 xcrun swift build --package-path "$project_root" --scratch-path "$build_dir" --configuration release "${architecture_flags[@]}" "${linker_flags[@]}"
 bin_dir="$(xcrun swift build --package-path "$project_root" --scratch-path "$build_dir" --configuration release "${architecture_flags[@]}" --show-bin-path)"
 mkdir -p "$app_path/Contents/MacOS" "$app_path/Contents/Resources"
@@ -62,7 +58,7 @@ if [[ "$local_assets" == 1 ]]; then
             /bin/cat "$movie" > "$asset_path/$banner/${movie:t}"
         done
     done
-    /bin/cat "$skip_archive" > "$asset_path/ForwardBackward.caar"
+    if [[ -r "$skip_archive" ]]; then /bin/cat "$skip_archive" > "$asset_path/ForwardBackward.caar"; fi
 fi
 /usr/bin/codesign --force --sign "$signing_identity" --options runtime \
     --entitlements "$project_root/Resources/Dynanotch.entitlements" \

@@ -494,7 +494,7 @@
     "headerPadding": 18,
     "headerSpacing": 10,
     "headerTop": 8,
-    "idleDotSeconds": 2,
+    "idleShrinkSeconds": 1.2,
     "idlePillSeconds": 5,
     "idlePillWidth": 64,
     "metadataSpacing": 6,

@@ -319,7 +319,9 @@ struct NotchRootView: View {
         .notchOnChange(of: model.presentation) { _, _ in model.updateIdlePill() }
         .notchOnChange(of: model.hasHardwareNotch) { _, _ in model.updateIdlePill() }
         .notchOnChange(of: model.surfaceTarget) { _, value in
-            motion.response = max(0.05, model.theme.number("motion.response", 0.32))
+            motion.response = !model.hasHardwareNotch && model.presentation == .idle && model.idlePillPhase == .shrinking
+                ? max(0.05, model.theme.number("motion.idleShrinkResponse", 0.65))
+                : max(0.05, model.theme.number("motion.response", 0.32))
             motion.damping = max(0.1, model.theme.number("motion.damping", 0.88))
             motion.update(value, screen: model.displayScreen)
         }

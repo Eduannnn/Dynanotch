@@ -46,7 +46,7 @@ struct SystemOSD: Equatable {
     let waveform = WaveformService()
     let mediaKeys = MediaKeyService()
     @Published var hasHardwareNotch = true
-    enum IdlePillPhase: Equatable { case pill, dot, hidden }
+    enum IdlePillPhase: Equatable { case pill, shrinking, hidden }
     @Published private(set) var idlePillPhase: IdlePillPhase = .pill
     private var idlePillWork: DispatchWorkItem?
     var notchScale: CGFloat { hasHardwareNotch ? 1 : max(0.6, min(1, theme.number("layout.notchlessScale", 0.85))) }
@@ -57,13 +57,13 @@ struct SystemOSD: Equatable {
         guard !hasHardwareNotch, presentation == .idle, !pointerInside else { return }
         let work = DispatchWorkItem { [weak self] in
             guard let self, !self.hasHardwareNotch, self.presentation == .idle, !self.pointerInside else { return }
-            self.idlePillPhase = .dot
+            self.idlePillPhase = .shrinking
             let hide = DispatchWorkItem { [weak self] in
                 guard let self, !self.hasHardwareNotch, self.presentation == .idle, !self.pointerInside else { return }
                 self.idlePillPhase = .hidden
             }
             self.idlePillWork = hide
-            DispatchQueue.main.asyncAfter(deadline: .now()+max(0.1, self.theme.number("layout.idleDotSeconds", 2)), execute: hide)
+            DispatchQueue.main.asyncAfter(deadline: .now()+max(0.1, self.theme.number("layout.idleShrinkSeconds", 1.2)), execute: hide)
         }
         idlePillWork = work
         DispatchQueue.main.asyncAfter(deadline: .now()+max(0.1, theme.number("layout.idlePillSeconds", 5)), execute: work)
@@ -292,8 +292,8 @@ struct SystemOSD: Equatable {
 
     var surfaceTarget: NotchSurface {
         if !hasHardwareNotch && presentation == .idle {
-            let width: CGFloat = idlePillPhase == .pill ? theme.number("layout.idlePillWidth", 64) : idlePillPhase == .dot ? 8 : 0.1
-            let height: CGFloat = idlePillPhase == .pill ? cameraHeight : idlePillPhase == .dot ? 8 : 0.1
+            let width: CGFloat = idlePillPhase == .pill ? theme.number("layout.idlePillWidth", 64) : 0.1
+            let height: CGFloat = idlePillPhase == .pill ? cameraHeight : 0.1
             return .init(width: max(0.1, width), height: height, offset: 0, radius: height/2, ear: 0, artworkSize: 1)
         }
         var surface = baseSurfaceTarget

@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "Dynanotch",
-    platforms: [.macOS("13.0")],
+    platforms: [.macOS("14.0")],
     products: [
         .executable(name: "Dynanotch", targets: ["NotchMac"]),
         .library(name: "NotchCore", targets: ["NotchCore"])

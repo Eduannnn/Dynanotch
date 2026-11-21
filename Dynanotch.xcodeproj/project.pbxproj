@@ -78,7 +78,7 @@
 		6AF61B1962C56FF1D9E94B84 = { isa = PBXBuildFile; fileRef = F8995BA5891B07E328C60D6B; };
 		FF4A15EEA61D4A3B097C1C27 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A12300000000000000000002, 6AF61B1962C56FF1D9E94B84); runOnlyForDeploymentPostprocessing = 0; };
 		326A678791C89F5FAABDFBFA = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (3821C1E3B67DECE8AEBA19CB); runOnlyForDeploymentPostprocessing = 0; };
-		ED8772ADEC3A6C25161BC957 = { isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 13.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
+		ED8772ADEC3A6C25161BC957 = { isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
 		4D8F54E7CBAF670D9F6C230D = { isa = XCBuildConfiguration; baseConfigurationReference = E602C0C48D244B8C99DA0704; buildSettings = {
         PRODUCT_NAME = "Dynanotch";
         EXECUTABLE_NAME = Dynanotch;
@@ -94,7 +94,7 @@
         LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
         COMBINE_HIDPI_IMAGES = YES;
     }; name = Debug; };
-		00F209874A1F7309F6DCEAA7 = { isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 13.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; SWIFT_OPTIMIZATION_LEVEL = "-O"; }; name = Release; };
+		00F209874A1F7309F6DCEAA7 = { isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; SWIFT_OPTIMIZATION_LEVEL = "-O"; }; name = Release; };
 		1A6EFC2CD0AF63DD14BE0438 = { isa = XCBuildConfiguration; baseConfigurationReference = E602C0C48D244B8C99DA0704; buildSettings = {
         PRODUCT_NAME = "Dynanotch";
         EXECUTABLE_NAME = Dynanotch;

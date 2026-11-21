@@ -8,7 +8,7 @@ import NotchCore
         let output = URL(fileURLWithPath: directory, isDirectory: true)
         let store = NotchThemeStore(folder: output.appendingPathComponent(UUID().uuidString), watch: false)
         let file = store.folder.appendingPathComponent("notchless.json")
-        try? JSONSerialization.data(withJSONObject: ["layout": ["idlePillSeconds": 0.2, "idleDotSeconds": 0.2]]).write(to: file)
+        try? JSONSerialization.data(withJSONObject: ["layout": ["idlePillSeconds": 0.2, "idleShrinkSeconds": 0.2]]).write(to: file)
         store.reload()
         let defaults = UserDefaults(suiteName: "DynanotchNotchlessTest." + UUID().uuidString)!
         let model = NotchModel(preferences: Preferences(defaults: defaults), themes: store)
@@ -20,8 +20,8 @@ import NotchCore
                       "smallerUI": model.notchScale == 0.85,
                       "floatingOutline": model.surfaceTarget.ear == 0]
         DispatchQueue.main.asyncAfter(deadline: .now()+0.3) {
-            checks["shrinksToDot"] = model.idlePillPhase == .dot && model.surfaceTarget.width == 8
-            render(model, output.appendingPathComponent("idle-dot.png"))
+            checks["shrinksWithoutIntermediateStop"] = model.idlePillPhase == .shrinking && model.surfaceTarget.width == 0.1
+            render(model, output.appendingPathComponent("idle-shrinking.png"))
         }
         DispatchQueue.main.asyncAfter(deadline: .now()+0.6) {
             checks["eventuallyHides"] = model.idlePillPhase == .hidden

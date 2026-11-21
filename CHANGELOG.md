@@ -1,15 +1,15 @@
 ## v1.2.0
 
-- Notchless display layout: smaller floating pill, idle pill-to-dot-to-hidden transition, activity/hover restoration, and scaled click targets.
+- Notchless display layout: smaller floating pill, continuous idle shrink-to-hidden transition, activity/hover restoration, and scaled click targets.
 
-- Universal 2 app for Apple Silicon and Intel; macOS 13 deployment target with experimental Ventura compatibility fallbacks.
+- Universal 2 app for Apple Silicon and Intel; macOS 14 deployment target.
 - Editable JSON themes for every presentation and activity state, per-element styling, custom layers, automatic reload, and recovery from invalid edits.
 - Optional expanded clear-glass refraction, black camera fade, and adjustable contrast; collapsed view stays black.
 - Click-to-open player, subtle hover swell, and keyboard transport-key animations.
 - Interactive lock-screen player with a separate padlock bubble.
 - AirPods battery details extend horizontally while the device video continues playing; model-aware symbols and missing-reading handling.
 
-Ventura runtime support remains unverified. Live waveform capture requires macOS 14.4+, and optional Apple assets depend on the installed OS.
+Older-system runtime support remains unverified. Live waveform capture requires macOS 14.4+, and optional Apple assets depend on the installed OS.
 
 # Changelog
 

@@ -18,7 +18,7 @@ The v1.2.0 download includes **arm64 and x86_64 in one app**. Choose the Univers
 
 JSON themes live in `~/Library/Application Support/Dynanotch/Themes`. Open them through **Settings → JSON themes → Open theme files**. `global.json` supplies shared defaults; collapsed, expanded, notice, AirPods, charging, OSD, browser, locked, and unlocking files override individual states. `REFERENCE.json` explains the element, layout, typography, glass, symbol, waveform, and animation controls. Changes reload automatically; malformed files retain the last working theme. Default templates are in `Resources/Themes`.
 
-On displays without a hardware notch, the app uses a smaller floating pill. While idle it shrinks to a dot after five seconds, then hides two seconds later. Activity or hovering near the pill location restores it. Scale, inset, and idle timings are editable in `notchless.json`. This layout also applies to external displays without a notch.
+On displays without a hardware notch, the app uses a smaller floating pill. While idle it shrinks continuously to nothing after five seconds idle. Activity or hovering near the pill location restores it. Scale, inset, and idle timings are editable in `notchless.json`. This layout also applies to external displays without a notch.
 
 The player opens on click. Hovering produces a small swell. Optional expanded Liquid Glass uses native compositor refraction and a black camera fade; the collapsed notch stays black. The refraction renderer uses private macOS APIs, so its availability can change between macOS releases.
 
@@ -28,10 +28,10 @@ The player opens on click. Hovering produces a small swell. Optional expanded Li
 | --- | --- |
 | **macOS 27.3 beta (26C5035r)** | **Supported and tested** on an M2 MacBook Air. All 20 sampled AirPods artwork cases decoded, and the native skip animations loaded and played. |
 | macOS 27.2 | Unverified. AirPods movies and native skip animations need to be checked on that build before claiming support. |
-| macOS 13 Ventura–15 Sequoia | Experimental. Universal 2 binaries target macOS 13.0; runtime testing on these versions is still needed. Older systems use compatible animation and black-surface fallbacks. |
+| macOS 14 Sonoma–15 Sequoia | Experimental. Universal 2 binaries target macOS 14.0; runtime testing on these versions is still needed. Older systems use compatible animation and black-surface fallbacks. |
 | macOS 26 and newer | Liquid Glass can be enabled where supported. Full hardware testing beyond the listed tested system is still needed. |
 
-The app reads optional artwork and animations from the installed macOS. Missing resources fall back to SF Symbols. AirPods movies and native skip resources are not bundled in this public download. Live audio waveform capture requires macOS 14.4 or newer; it is unavailable on Ventura. Ventura uses a timer only while a surface transition is active, and simpler symbol/favourite animations.
+The app reads optional artwork and animations from the installed macOS. Missing resources fall back to SF Symbols. The release bundles AirPods pairing movies and native skip animations so older systems can use them without relying on newer system resources. Unsupported or unavailable resources still fall back to symbols. Live audio waveform capture requires macOS 14.4 or newer; it is unavailable on macOS 14.0–14.3.
 
 ## Now playing
 
@@ -113,7 +113,7 @@ xcrun swift test
 Build/Dynanotch.app/Contents/MacOS/Dynanotch --verify-app Build/Verification
 ```
 
-`NotchCore` holds the shared activity, input, and audio logic. `NotchMac` handles windows, SwiftUI, and macOS integrations. The app verifier uses synthetic activities and battery readings. Live Bluetooth readings, lock-screen visibility, and routing audio to a physical AirPlay receiver still need broader hardware testing. Optional system adapters vary by macOS release. Apple pairing movies and skip animations are read from the installed OS when available; they are not distributed here.
+`NotchCore` holds the shared activity, input, and audio logic. `NotchMac` handles windows, SwiftUI, and macOS integrations. The app verifier uses synthetic activities and battery readings. Live Bluetooth readings, lock-screen visibility, and routing audio to a physical AirPlay receiver still need broader hardware testing. Optional system adapters vary by macOS release. Release builds include pairing movies and skip animations; the installed OS is also checked for resources. Missing or unsupported resources use symbol fallbacks.
 
 See the [changelog](CHANGELOG.md), [porting notes](PORTING.md), and [implementation notes](docs/). Dynanotch began as a Swift port of [Eduannnn/quickshell-notch](https://github.com/Eduannnn/quickshell-notch) at commit `85505dcd789589a61cc981115b892d6475e11ada`.
 

@@ -6,6 +6,6 @@
     "notchlessTopInset": 6,
     "idlePillWidth": 64,
     "idlePillSeconds": 5,
-    "idleDotSeconds": 2
+    "idleShrinkSeconds": 1.2
   }
 }

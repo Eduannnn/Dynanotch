@@ -209,11 +209,11 @@ struct NotchTheme {
                 "waveformInset": nullable, "waveformY": nullable, "headerSpacing": 10, "metadataSpacing": 6,
                 "headerPadding": 18, "headerTop": 8, "metadataY": -7, "controlsSpacing": 7,
                 "controlsTop": 2, "controlsPadding": 24, "progressTop": 2, "progressPadding": 24,
-                "notchlessScale": 0.85, "notchlessTopInset": 6, "idlePillWidth": 64, "idlePillSeconds": 5, "idleDotSeconds": 2,
+                "notchlessScale": 0.85, "notchlessTopInset": 6, "idlePillWidth": 64, "idlePillSeconds": 5, "idleShrinkSeconds": 1.2,
                 "bubbleSize": 32, "bubbleGap": 8, "airPodsExpandedWidth": 204,
                 "waveformBars": 6, "waveformBarWidth": 2.2, "waveformBarSpacing": 2,
                 "waveformMinHeight": 3, "waveformMaxHeight": 25, "waveformCornerRadius": 1.1],
-            "motion": ["response": 0.32, "damping": 0.88, "bubbleResponse": 0.57, "bubbleDamping": 0.94,
+            "motion": ["response": 0.32, "idleShrinkResponse": 0.65, "damping": 0.88, "bubbleResponse": 0.57, "bubbleDamping": 0.94,
                 "fadeDuration": 0.14],
             "symbols": Dictionary(uniqueKeysWithValues: ["previous", "next", "play", "pause", "favorite", "favorited", "airplay", "locked", "unlocked", "volume", "muted", "brightness", "charging", "airPodsCase", "airPodLeft", "airPodRight"].map { ($0, nullable as Any) }),
             "elements": elements, "layers": []]
