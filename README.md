@@ -38,11 +38,11 @@ The dashed outline shows where the physical camera notch sits. On displays witho
 
 Turn on **Liquid Glass** in Settings to see the wallpaper bend through the expanded player.
 
-![Liquid Glass player over a blue wallpaper](docs/images/liquid-glass.png)
+<img src="docs/images/liquid-glass.png" alt="Liquid Glass player over a blue wallpaper" width="840">
 
 ## In motion
 
-![Dynanotch expands, flips the cover, changes volume and brightness, and opens the AirPods battery pill](docs/images/dynanotch-motion.gif)
+<img src="docs/images/dynanotch-motion.gif" alt="Dynanotch expands, flips the cover, changes volume and brightness, and opens the AirPods battery pill" width="840">
 
 The demo uses sample tracks and battery readings.
 
