@@ -420,7 +420,7 @@ struct NotchRootView: View {
         case .osd:
             if let osd = model.osd {
                 HStack(spacing: 0) {
-                    osdIcon(osd, size: 24)
+                    osdIcon(osd, size: 17)
                         .frame(width: model.osdLeadingWidth)
                     Color.clear.frame(width: model.cameraWidth)
                     NotchVolumeBar(osd: osd)
