@@ -262,14 +262,10 @@ struct NotchRootView: View {
                     if let osd = model.expandedOSD {
                         let rowY = model.cameraHeight / 2
                         let artworkTop = surface.artworkY - surface.artworkSize / 2
-                        let leadingSpace = model.hasHardwareNotch
-                            ? (surface.width - model.cameraWidth) / 2 - surface.offset
-                            : surface.artworkX + surface.artworkSize / 2
-                        let iconX = max(12, leadingSpace / 2) + 3
                         let iconY = max(10, min(artworkTop / 2, rowY - 2))
                         ZStack(alignment: .topLeading) {
                             osdIcon(osd, size: 16)
-                                .position(x: iconX, y: iconY)
+                                .position(x: surface.artworkX, y: iconY)
                             NotchVolumeBar(osd: osd, width: 47)
                                 .position(x: surface.width - surface.artworkX, y: rowY)
                         }
