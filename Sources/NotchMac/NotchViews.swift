@@ -458,7 +458,8 @@ struct NotchRootView: View {
                 Image(systemName: customSymbol ?? (isMuted ? "speaker.slash.fill" : "speaker.wave.3.fill"),
                       variableValue: isBrightness || isMuted ? nil : level)
                     .font(.system(size: size, weight: .medium))
-                    .contentTransition(animates ? .interpolate : .identity)
+                    .contentTransition(animates ? (isMuted ? symbolReplaceTransition : .interpolate) : .identity)
+                    .animation(animates ? .easeInOut(duration: 0.14) : nil, value: isMuted)
             }
         }
         .frame(height: size * 1.25)
