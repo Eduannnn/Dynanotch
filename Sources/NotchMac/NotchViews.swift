@@ -375,8 +375,8 @@ struct NotchRootView: View {
                 .allowsHitTesting(false)
             } else {
                 Color.clear.frame(width: model.hasHardwareNotch ? model.cameraWidth : model.surfaceTarget.width, height: model.collapsedHeight)
-                    .contentShape(Rectangle()).onTapGesture { model.openSettings?() }
-                    .accessibilityLabel("Dynanotch Settings")
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
         case .collapsed:
             HStack(spacing: 0) {

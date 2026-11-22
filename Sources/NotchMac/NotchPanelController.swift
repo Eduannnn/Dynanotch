@@ -225,7 +225,7 @@ final class NotchPanel: NSPanel {
     private func isInteractive(_ point: NSPoint) -> Bool {
         if model.hidden { return false }
         if model.showsLockLayout { return model.media.snapshot != nil && isBodyInteractive(point) }
-        return isBodyInteractive(point) || isOverAirPodsSatellite(point)
+        return (model.presentation != .idle && isBodyInteractive(point)) || isOverAirPodsSatellite(point)
             || (model.showsMediaBubble && isOverSatellite(.music, point: point))
     }
 
