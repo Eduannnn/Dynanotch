@@ -126,9 +126,9 @@ struct SystemSnapshot: Equatable {
             if state.onAC && !next.onAC { onUnplugged?() }
         }
         if let level = next.battery, !next.onAC {
-            let stage = level <= 0.05 ? 2 : level <= 0.2 ? 1 : 0
+            let stage = level <= 0.05 ? 2 : level <= 0.10 ? 1 : 0
             if stage > warningStage {
-                onNotice?(.init(key: "power/warning/\(stage)", name: stage == 2 ? "Battery critical" : "Low battery", kind: stage == 2 ? .batteryCritical : .batteryLow, transport: "Power", battery: level))
+                onNotice?(.init(key: "power/warning/\(stage)", name: "Low battery", kind: stage == 2 ? .batteryCritical : .batteryLow, transport: "Power", battery: level))
             }
             warningStage = stage
         } else { warningStage = 0 }

@@ -59,6 +59,25 @@ import NotchCore
         }
         var checks: [String: Bool] = [:]
         checks["defaultsLoad"] = store.error.isEmpty && store.theme(state: "expanded").number("surface.width", 360) == 360
+        let baseline = model.surfaceTarget
+        model.preferences.liquidGlass = true
+        checks["glassUsesSameGeometry"] = model.surfaceTarget == baseline
+        model.preferences.liquidGlass = false
+        checks["defaultDesignMeasurements"] = baseline.radius == 30 && model.design.headerPadding == 18
+            && model.design.controlsPadding == 24 && model.design.satelliteSpacing == 8
+        save(["design": ["basePadding": 10, "expandedRadius": 36, "controlSpacing": 9, "satelliteSpacing": 12],
+              "layers": [["surfaceInset": 6, "color": "#14FFFFFF", "opacity": 0.3]]], "global")
+        store.reload()
+        checks["designTokensApply"] = model.surfaceTarget.radius == 36 && model.design.headerPadding == 15
+            && model.design.controlsPadding == 20 && model.design.controlSpacing == 9 && model.bubbleGap == 12
+        checks["concentricInsets"] = NotchDesign.concentricRadius(outer: 36, padding: 6) == 30
+            && NotchDesign.concentricRadius(outer: 4, padding: 6) == 0
+        render(model, output.appendingPathComponent("concentric-layer.png"))
+        save(["design": ["basePadding": -2]], "global"); store.reload()
+        checks["invalidDesignRetainsLastGood"] = !store.error.isEmpty && model.design.headerPadding == 15
+        save(["layout": ["headerPadding": 19, "bubbleGap": 60]], "global"); store.reload()
+        checks["legacyLayoutStillApplies"] = model.design.headerPadding == 19 && model.bubbleGap == 60
+        save([:], "global"); store.reload()
         save(["version": 1, "surface": ["width": 480, "height": 240, "radius": 42],
               "elements": ["title": ["color": "#FFAA00", "offsetX": 7]]], "expanded")
         store.reload()
@@ -362,17 +381,21 @@ import NotchCore
         let compact = model.surfaceTarget
         render(model, output.appendingPathComponent("music-compact.png"))
         model.osd = .init(kind: .volume, level: 0.6, muted: false)
-        let volumeBubblesMusic = model.presentation == .osd && model.showsMediaBubble && model.surfaceTarget.artworkX < 0
+        func osdTakesOver(_ model: NotchModel) -> Bool {
+            model.presentation == .osd && !model.showsMediaBubble && !model.showsLockBubble
+                && model.contentHeight > model.cameraHeight && model.bodyOffset == 0
+        }
+        let volumeReplacesMusic = osdTakesOver(model)
         render(model, output.appendingPathComponent("music-volume-compact.png"))
         model.pinned = true; model.hovering = true
-        let volumeKeepsExpanded = model.expandedOSD?.kind == .volume && model.trailingVolume == nil
-        render(model, output.appendingPathComponent("music-volume-expanded.png"), width: 800)
+        let volumeReplacesExpanded = osdTakesOver(model)
         model.osd = .init(kind: .brightness, level: 0.4, muted: false)
-        let brightnessKeepsExpanded = model.expandedOSD?.kind == .brightness && model.trailingVolume == nil
-        render(model, output.appendingPathComponent("music-brightness-expanded.png"), width: 800)
+        let brightnessReplacesExpanded = osdTakesOver(model)
         model.media.command("playpause")
-        let pausedPlayerKeepsBrightnessOSD = model.expandedOSD?.kind == .brightness && model.trailingVolume == nil
-        model.osd = nil; model.media.command("playpause")
+        let pausedPlayerUsesBrightnessOSD = osdTakesOver(model)
+        model.osd = nil
+        let osdRestoresExpanded = model.presentation == .expanded && model.pinned
+        model.media.command("playpause")
         model.media.command("playpause")
         model.close(); model.previewNotice()
         let noticeDisplacesMedia = model.presentation == .notice && model.showsMediaBubble
@@ -388,45 +411,53 @@ import NotchCore
         model.closeAirPodsDetails()
         let inlineAirPodsCollapsed = !model.showsInlineAirPodsDetails && model.contentHeight == inlineHeight
         model.osd = .init(kind: .volume, level: 0.6, muted: false)
-        let volumePillPreservesNotice = model.trailingVolume?.level == 0.6
-            && model.presentation == .notice && model.showsMediaBubble
-        render(model, output.appendingPathComponent("notice-with-volume-pill.png"))
+        let volumeReplacesNotice = osdTakesOver(model) && model.mainNotice?.airPodsArtwork != nil
         model.osd = nil
-        model.previewCharging()
-        let airPodsFirst = model.mainNotice?.airPodsArtwork != nil
-            && model.trailingCharge?.kind == .charging && model.showsMediaBubble
-        render(model, output.appendingPathComponent("airpods-with-charging-pill.png"))
-        model.osd = .init(kind: .volume, level: 0.6, muted: false)
-        let pairedNoticeKeepsVolumeSeparate = model.trailingVolume != nil
-            && model.volumePillExtraOffset == NotchModel.chargePillWidth + NotchModel.volumePillGap
         model.activateBubble()
-        let bubbleRestoresMedia = model.presentation == .expanded && model.trailingCharge != nil
-            && model.leadingAirPods != nil && !model.showsMediaBubble
+        let bubbleRestoresMedia = model.presentation == .expanded && !model.showsMediaBubble
+        let chargingLayout = NotchModel(preferences: Preferences(defaults: defaults))
+        chargingLayout.cameraWidth = 208; chargingLayout.cameraHeight = 37.5; chargingLayout.availableWidth = 1710
+        chargingLayout.media.setPreview(true)
+        chargingLayout.toggleExpansion()
+        chargingLayout.previewNotice()
+        chargingLayout.previewCharging()
+        func chargingTakesOver(_ model: NotchModel) -> Bool {
+            model.presentation == .notice && model.mainNotice?.kind == .charging
+                && !model.showsMediaBubble && !model.showsLockBubble && model.leadingAirPods == nil
+                && model.lockScreenNotice == nil
+        }
+        let chargingTakesCenter = chargingTakesOver(chargingLayout)
+        render(chargingLayout, output.appendingPathComponent("charging-takeover.png"))
+        chargingLayout.screenLocked = true
+        let lockedChargingTakesCenter = chargingTakesOver(chargingLayout)
+        render(chargingLayout, output.appendingPathComponent("locked-charging-takeover.png"))
+        var chargingRestoresPlayer = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.25) {
+            chargingRestoresPlayer = chargingLayout.chargingTakeover == nil
+                && chargingLayout.presentation == .expanded && chargingLayout.showsLockBubble
+                && chargingLayout.leadingAirPods != nil
+        }
         model.media.command("playpause")
         let musicLayout = NotchModel(preferences: Preferences(defaults: defaults))
         musicLayout.cameraWidth = 208; musicLayout.cameraHeight = 37.5; musicLayout.availableWidth = 1710
         musicLayout.media.setPreview(true)
-        musicLayout.previewCharging()
         musicLayout.previewNotice(battery: nil)
-        let chargerFirst = musicLayout.mainNotice?.airPodsArtwork != nil && musicLayout.trailingCharge != nil
         let musicKeepsCenter = musicLayout.presentation == .collapsed && !musicLayout.showsMediaBubble
             && musicLayout.leadingAirPods?.airPodsArtwork != nil && musicLayout.leadingAirPods?.battery == nil
-            && musicLayout.trailingCharge?.kind == .charging
-        render(musicLayout, output.appendingPathComponent("music-with-airpods-and-charging.png"))
+        render(musicLayout, output.appendingPathComponent("music-with-airpods.png"))
         musicLayout.previewNotice(battery: 0.75)
-        render(musicLayout, output.appendingPathComponent("airpods-connected-with-music-and-charging.png"))
+        render(musicLayout, output.appendingPathComponent("airpods-connected-with-music.png"))
         musicLayout.osd = .init(kind: .volume, level: 0.6, muted: false)
-        let compactVolumeBubblesMusicWithNotices = musicLayout.presentation == .osd
-            && musicLayout.showsMediaBubble && musicLayout.trailingVolume == nil
-            && musicLayout.leadingAirPods != nil && musicLayout.trailingCharge != nil
-        render(musicLayout, output.appendingPathComponent("compact-volume-with-airpods-and-charging.png"))
+        let volumeReplacesMusicWithNotices = osdTakesOver(musicLayout)
+            && musicLayout.leadingAirPods != nil
+        render(musicLayout, output.appendingPathComponent("compact-volume-with-airpods.png"))
         musicLayout.screenLocked = true
-        let lockedVolumeVisible = musicLayout.presentation == .collapsed && musicLayout.trailingVolume?.level == 0.6
+        let lockedVolumeVisible = osdTakesOver(musicLayout)
+            && musicLayout.leadingAirPods != nil
         musicLayout.osd = nil
         let lockedBubblesActivities = musicLayout.presentation == .collapsed && !musicLayout.showsMediaBubble && musicLayout.showsLockBubble
-            && musicLayout.leadingAirPods != nil && musicLayout.trailingCharge != nil
-            && musicLayout.trailingVolume == nil
-        render(musicLayout, output.appendingPathComponent("locked-with-music-airpods-and-charging.png"))
+            && musicLayout.leadingAirPods != nil
+        render(musicLayout, output.appendingPathComponent("locked-with-music-airpods.png"))
         musicLayout.toggleExpansion()
         let lockedPlayerOpens = musicLayout.presentation == .expanded && musicLayout.showsLockBubble
             && !musicLayout.showsMediaBubble
@@ -476,7 +507,6 @@ import NotchCore
                   airPodsArtwork: testArtwork, airPodsBattery: .init(left: 0.63, right: 0.71, chargingCase: 0.89))
         ])
         morphModel.enqueue(testNotice)
-        morphModel.previewCharging()
         let centerBeforeMorph = morphModel.surfaceTarget
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 80),
                               styleMask: [.borderless], backing: .buffered, defer: false)
@@ -509,7 +539,7 @@ import NotchCore
                 reopened = abs(frame.width - NotchModel.airPodsExpandedWidth) < 1
                     && abs(frame.maxX - expectedRight) < 1
                     && (compactSatelliteFrame?.minX ?? 0) > frame.minX
-                    && morphModel.surfaceTarget == centerBeforeMorph && morphModel.trailingCharge != nil
+                    && morphModel.surfaceTarget == centerBeforeMorph
             }
             render(morphModel, output.appendingPathComponent("airpods-horizontal-levels.png"), width: 800)
             morphModel.toggleAirPodsDetails(testNotice.id)
@@ -530,17 +560,13 @@ import NotchCore
             render(maxLayout, output.appendingPathComponent("airpods-max-horizontal.png"), width: 800)
         }
         maxLayout.stop()
-        var chargeExpiresFirst = false
         let staggered = NotchModel(preferences: Preferences(defaults: defaults))
-        staggered.previewCharging()
         staggered.enqueue(.init(key: "intervening-usb", name: "USB Device", kind: .usb))
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { staggered.previewNotice() }
-        var delayedPairKeepsCharging = false
+        staggered.previewCharging()
+        let chargingInterruptsNotice = chargingTakesOver(staggered) && staggered.notices.current?.kind == .usb
+        var chargingRestoresNotice = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-            delayedPairKeepsCharging = staggered.inlineAirPods != nil && staggered.trailingCharge != nil
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.25) {
-            chargeExpiresFirst = musicLayout.trailingCharge == nil && musicLayout.leadingAirPods != nil
+            chargingRestoresNotice = staggered.presentation == .notice && staggered.mainNotice?.kind == .usb
         }
         model.close()
         model.screenLocked = true
@@ -567,11 +593,12 @@ import NotchCore
         // The installed loop is six seconds. Finish this check before the playback watchdog can expire.
         DispatchQueue.main.asyncAfter(deadline: .now()+7.5) {
             let motionSettled = !motion.isAnimating && abs(motion.surface.width-expanded.width) < 0.1
-            let bothNoticesExpired = musicLayout.notices.current == nil && musicLayout.notices.pending.isEmpty
+            let airPodsNoticeExpired = musicLayout.notices.current == nil && musicLayout.notices.pending.isEmpty
             let inlineNoticeExpired = inlineLayout.notices.current == nil
             playbackWindow.orderOut(nil)
             inlineLayout.stop()
             musicLayout.stop()
+            chargingLayout.stop()
             staggered.stop()
             window.orderOut(nil)
             morphModel.stop()
@@ -579,20 +606,20 @@ import NotchCore
             let diagnostics: [String: Any] = [
                 "airPodsMorphIntermediate": sawIntermediateWidth, "airPodsMorphReopened": reopened,
                 "airPodsMorphCollapsed": collapsedAgain, "airPodsMorphDisconnected": disconnected,
-                "volumeBubblesMusic": volumeBubblesMusic, "volumeKeepsExpanded": volumeKeepsExpanded, "brightnessKeepsExpanded": brightnessKeepsExpanded,
+                "volumeReplacesMusic": volumeReplacesMusic, "volumeReplacesExpanded": volumeReplacesExpanded, "brightnessReplacesExpanded": brightnessReplacesExpanded,
                 "inlineAirPodsDetails": inlineAirPodsExpanded && inlineAirPodsCollapsed,
-                "compactVolumeBubblesMusicWithNotices": compactVolumeBubblesMusicWithNotices,
-                "pausedPlayerKeepsBrightnessOSD": pausedPlayerKeepsBrightnessOSD,
-                "volumePillPreservesNotice": volumePillPreservesNotice,
-                "airPodsFirst": airPodsFirst, "chargerFirst": chargerFirst,
+                "volumeReplacesMusicWithNotices": volumeReplacesMusicWithNotices,
+                "pausedPlayerUsesBrightnessOSD": pausedPlayerUsesBrightnessOSD, "osdRestoresExpanded": osdRestoresExpanded,
+                "volumeReplacesNotice": volumeReplacesNotice,
+                "chargingTakesCenter": chargingTakesCenter, "lockedChargingTakesCenter": lockedChargingTakesCenter,
+                "chargingRestoresPlayer": chargingRestoresPlayer, "chargingInterruptsNotice": chargingInterruptsNotice,
+                "chargingRestoresNotice": chargingRestoresNotice,
                 "nativeCombinedWins": nativeCombinedWins, "missingCombinedUsesEarbuds": missingCombinedUsesEarbuds,
                 "unavailableChargeStaysUnknown": unavailableChargeStaysUnknown,
                 "musicKeepsCenter": musicKeepsCenter, "musicKeepsBatteryReading": musicKeepsBatteryReading,
-                "chargeExpiresFirst": chargeExpiresFirst, "bothNoticesExpired": bothNoticesExpired,
+                "airPodsNoticeExpired": airPodsNoticeExpired,
                 "airPodsSurvivesOldCutoff": survivesOldCutoff, "inlineAirPodsExpired": inlineNoticeExpired,
                 "testedNativeAirPodsMovie": expectsMovie,
-                "pairedNoticeKeepsVolumeSeparate": pairedNoticeKeepsVolumeSeparate,
-                "delayedPairKeepsCharging": delayedPairKeepsCharging,
                 "trackChangeStaysCollapsed": trackChangeStaysCollapsed,
                 "coverFlipFollowsSkipDirection": nextFlipsForward && previousFlipsBackward && !model.media.artworkFlipsBackward,
                 "noticeDisplacesMedia": noticeDisplacesMedia, "bubbleRestoresMedia": bubbleRestoresMedia,
@@ -604,15 +631,15 @@ import NotchCore
                 "lockedVolumeVisible": lockedVolumeVisible,
                 "motionSettled": motionSettled, "motionFrames": motion.frameCount,
                 "finalWidth": motion.surface.width, "finalHeight": motion.surface.height,
-                "result": motionSettled && volumeBubblesMusic && volumeKeepsExpanded && brightnessKeepsExpanded && pausedPlayerKeepsBrightnessOSD
+                "result": motionSettled && volumeReplacesMusic && volumeReplacesExpanded && brightnessReplacesExpanded && pausedPlayerUsesBrightnessOSD && osdRestoresExpanded
                     && inlineAirPodsExpanded && inlineAirPodsCollapsed
-                    && compactVolumeBubblesMusicWithNotices
+                    && volumeReplacesMusicWithNotices
                     && trackChangeStaysCollapsed && nextFlipsForward && previousFlipsBackward
                     && noticeDisplacesMedia && bubbleRestoresMedia
                     && lockedCollapses && lockedBubblesActivities && lockedVolumeVisible && unlockKeepsPlayerAndLockBubble && lockedPlayerOpens && lockedPlayerExpands && lockedPlayerCloses
-                    && unlockRestoresExpansion && volumePillPreservesNotice
-                    && survivesOldCutoff && inlineNoticeExpired && delayedPairKeepsCharging
-                    && airPodsFirst && chargerFirst && pairedNoticeKeepsVolumeSeparate && musicKeepsCenter && musicKeepsBatteryReading && chargeExpiresFirst && bothNoticesExpired && airPodsMorphPassed && nativeCombinedWins && missingCombinedUsesEarbuds && unavailableChargeStaysUnknown ? "pass" : "fail",
+                    && unlockRestoresExpansion && volumeReplacesNotice
+                    && survivesOldCutoff && inlineNoticeExpired && chargingInterruptsNotice && chargingRestoresNotice
+                    && chargingTakesCenter && lockedChargingTakesCenter && chargingRestoresPlayer && musicKeepsCenter && musicKeepsBatteryReading && airPodsNoticeExpired && airPodsMorphPassed && nativeCombinedWins && missingCombinedUsesEarbuds && unavailableChargeStaysUnknown ? "pass" : "fail",
                 "scope": "Actual app models and renderer with preview media; no external player commands."
             ]
             if let data = try? JSONSerialization.data(withJSONObject: diagnostics, options: [.prettyPrinted, .sortedKeys]) {

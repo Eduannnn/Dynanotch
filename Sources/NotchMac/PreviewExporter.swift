@@ -32,9 +32,12 @@ import NotchCore
         save(model: charging, title: "COLLAPSED · CHARGING", name: "Charging.png", width: 560, height: 155, destination: destination)
         let critical = NotchModel()
         critical.system.loadRenderingPreview(battery: 0.05); critical.cameraWidth = 180; critical.cameraHeight = 32
+        critical.enqueue(.init(key: "preview/battery-critical", name: "Low battery", kind: .batteryCritical, battery: 0.05))
         save(model: critical, title: "BATTERY · 5 PERCENT", name: "CriticalBattery.png", width: 560, height: 155, destination: destination)
-        critical.system.loadRenderingPreview(battery: 0.05, charging: true)
-        save(model: critical, title: "CHARGING · 5 PERCENT", name: "ChargingCriticalBattery.png", width: 560, height: 155, destination: destination)
+        let chargingCritical = NotchModel()
+        chargingCritical.cameraWidth = 180; chargingCritical.cameraHeight = 32
+        chargingCritical.previewCharging(battery: 0.05)
+        save(model: chargingCritical, title: "CHARGING · 5 PERCENT", name: "ChargingCriticalBattery.png", width: 560, height: 155, destination: destination)
         let usb = NotchModel()
         usb.system.loadRenderingPreview(); usb.cameraWidth = 180; usb.cameraHeight = 32
         usb.enqueue(.init(key: "preview/usb", name: "USB Headset", kind: .headphones, transport: "USB"))

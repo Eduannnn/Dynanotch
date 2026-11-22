@@ -100,10 +100,13 @@ import NotchCore
         }
         if type == .keyDown, let cocoa = NSEvent(cgEvent: event) {
             let flags = cocoa.modifierFlags
-            if isNotchSettingsShortcut(characters: cocoa.charactersIgnoringModifiers, command: flags.contains(.command),
+            let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+            let characters = cocoa.charactersIgnoringModifiers
+            let shortcutCharacters = characters?.isEmpty != false && keyCode == 43 ? "," : characters
+            if isNotchSettingsShortcut(characters: shortcutCharacters, command: flags.contains(.command),
                 shift: flags.contains(.shift), option: flags.contains(.option), control: flags.contains(.control), overNotch: true),
                 settingsShortcut?() == true {
-                capturedSettingsKey = event.getIntegerValueField(.keyboardEventKeycode); return nil
+                capturedSettingsKey = keyCode; return nil
             }
             return Unmanaged.passUnretained(event)
         }

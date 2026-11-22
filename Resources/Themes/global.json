@@ -5,6 +5,20 @@
     "timeColor": null
   },
   "description": "State files override these values. Elements use points; colors are hex RGBA. Edit and save to reload automatically. Null retains the built-in size/color. Names containing dots are literal element names.",
+  "design": {
+    "basePadding": null,
+    "smallPadding": null,
+    "mediumPadding": null,
+    "largePadding": null,
+    "horizontalSpacing": null,
+    "verticalSpacing": null,
+    "controlSpacing": null,
+    "satelliteSpacing": null,
+    "compactRadius": null,
+    "peekRadius": null,
+    "expandedRadius": null,
+    "innerRadius": null
+  },
   "elements": {
     "airplay": {
       "backgroundColor": null,
@@ -470,12 +484,13 @@
   "glass": {
     "blur": 0,
     "dimming": 0.25,
-    "dispersion": 1.8,
+    "dispersion": 0.35,
     "edgeHighlight": false,
+    "edgeHighlightIntensity": 1,
     "enabled": null,
     "fadeHeight": 90,
     "lensHeight": 44,
-    "refraction": 42,
+    "refraction": 32,
     "shadowOpacity": 0,
     "topOpacity": 1
   },
@@ -523,6 +538,7 @@
     "backgroundColor": "#000000",
     "earRadius": null,
     "edgeHighlight": true,
+    "edgeHighlightIntensity": 1,
     "height": null,
     "hoverHeight": 2,
     "hoverWidth": 6,

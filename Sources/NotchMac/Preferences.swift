@@ -6,6 +6,7 @@ import SwiftUI
     @Published var showOnLockScreen: Bool { didSet { defaults.set(showOnLockScreen, forKey: "showOnLockScreen") } }
     @Published var hideMenuBarIcon: Bool { didSet { defaults.set(hideMenuBarIcon, forKey: "hideMenuBarIcon") } }
     @Published var liquidGlass: Bool { didSet { defaults.set(liquidGlass, forKey: "liquidGlass") } }
+    @Published var previewPeek: Bool { didSet { defaults.set(previewPeek, forKey: "previewPeek") } }
     @Published var artworkTint: Bool { didSet { defaults.set(artworkTint, forKey: "artworkTint") } }
     @Published var showNotices: Bool { didSet { defaults.set(showNotices, forKey: "showNotices") } }
     @Published var showOSD: Bool { didSet { defaults.set(showOSD, forKey: "showOSD") } }
@@ -24,6 +25,7 @@ import SwiftUI
         showOnLockScreen = flag("showOnLockScreen")
         hideMenuBarIcon = flag("hideMenuBarIcon", fallback: false)
         liquidGlass = flag("liquidGlass", fallback: false)
+        previewPeek = flag("previewPeek", fallback: false)
         artworkTint = flag("artworkTint")
         showNotices = flag("showNotices")
         showOSD = flag("showOSD")

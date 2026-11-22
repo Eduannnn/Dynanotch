@@ -14,17 +14,11 @@ I test Dynanotch on an M2 MacBook Air running **macOS 27.3 beta**. The app targe
 
 Click to open the player. Click its top edge or anywhere outside to close it. You can skip, pause, or scrub in Music and Spotify, and favorite tracks or pick an AirPlay output in Apple Music. Browser audio can show the app icon and a live waveform.
 
-Volume and brightness sit across the top of the expanded player. The speaker waves follow the volume, and the sun’s dots stretch into rays as brightness goes up. Auto-brightness stays quiet. In the compact view, the cover moves into a side bubble while you adjust volume.
-
-| Volume | Brightness |
-| --- | --- |
-| ![Volume above the artwork](docs/images/expanded-volume.png) | ![Low brightness with a dotted sun](docs/images/expanded-brightness.png) |
+Volume and brightness briefly take over the main notch. The icon sits on the left, the bar sits below the camera cutout, and the percentage sits on the right. Automatic brightness changes stay quiet.
 
 ## AirPods and charging
 
-Connect your AirPods to see the pairing animation and a battery ring. Click their bubble to see the case and each earbud’s charge. AirPods Max shows a single reading. If the Mac starts charging at the same time, its battery gets a bubble on the right.
-
-![AirPods and charging bubbles beside the compact player](docs/images/airpods-connected.png)
+Connect your AirPods to see the pairing animation and a battery ring. Click their bubble to see the case and each earbud’s charge. AirPods Max shows a single reading. When you plug in your Mac, the charging level briefly takes over the main notch, including on the lock screen.
 
 ![AirPods case, left earbud, and right earbud battery readings](docs/images/airpods-battery-details.png)
 
@@ -48,7 +42,7 @@ The demo uses sample tracks and battery readings.
 
 ## Settings and permissions
 
-Open Settings from the menu-bar icon or press **⌘,** while pointing at the notch. Pick an AirPods model to try a preview. Use **JSON themes → Open theme files** to change the layout, colors, and motion. Edits reload when you save, and `REFERENCE.json` explains what each setting does.
+Open Settings from the menu-bar icon or press **⌘,** while pointing at the notch. Pick an AirPods model to try a preview. Use **Advanced → More settings (Dangerous!) → Open theme files** to change the layout, colors, and motion. Edits reload when you save. Use the optional `design` group in `global.json` to share padding, spacing, and radii across views. `REFERENCE.json` lists the keys and explains how they work with existing themes.
 
 | Permission | Why Dynanotch asks |
 | --- | --- |

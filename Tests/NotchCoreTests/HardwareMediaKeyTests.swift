@@ -40,22 +40,22 @@ final class HardwareMediaKeyTests: XCTestCase {
         XCTAssertFalse(capture.route(stroke(.mute, down: false), eligible: true) { _ in true })
     }
     func testStandardAndFineStepsClampAtBothEnds() {
-        XCTAssertEqual(hardwareLevelStep(0.5, increasing: true, fine: false), 0.5625)
-        XCTAssertEqual(hardwareLevelStep(0.5, increasing: false, fine: true), 0.484375)
+        XCTAssertEqual(hardwareLevelStep(0.5, increasing: true, fine: false), 0.55)
+        XCTAssertEqual(hardwareLevelStep(0.5, increasing: false, fine: true), 0.4875)
         XCTAssertEqual(hardwareLevelStep(0.99, increasing: true, fine: false), 1)
         XCTAssertEqual(hardwareLevelStep(0.01, increasing: false, fine: false), 0)
-        XCTAssertEqual(hardwareLevelStep(1.0 / 16 + 0.002, increasing: false, fine: false), 0)
-        XCTAssertEqual(hardwareLevelStep(1.0 / 64 + 0.002, increasing: false, fine: true), 0)
+        XCTAssertEqual(hardwareLevelStep(1.0 / 20 + 0.002, increasing: false, fine: false), 0)
+        XCTAssertEqual(hardwareLevelStep(1.0 / 80 + 0.002, increasing: false, fine: true), 0)
     }
 
     func testFourFineVolumeStepsReachZeroDespiteDeviceReadbackRounding() {
         var readback = hardwareVolumeStep(0, increasing: true, fine: false) + 0.002
         for expectedTick in [3, 2, 1, 0] {
             let target = hardwareVolumeStep(readback, increasing: false, fine: true)
-            XCTAssertEqual(target, Double(expectedTick) / 64)
+            XCTAssertEqual(target, Double(expectedTick) / 80)
             readback = target + 0.002
         }
-        XCTAssertEqual(hardwareVolumeStep(0, increasing: true, fine: true), 1.0 / 64)
-        XCTAssertEqual(hardwareVolumeStep(0.05, increasing: false, fine: true), 3.0 / 64)
+        XCTAssertEqual(hardwareVolumeStep(0, increasing: true, fine: true), 1.0 / 80)
+        XCTAssertEqual(hardwareVolumeStep(0.05, increasing: false, fine: true), 3.0 / 80)
     }
 }

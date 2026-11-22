@@ -4,7 +4,7 @@ import Combine
 import NotchCore
 
 enum NotchSatellite: Hashable {
-    case music, airPods, charge, volume
+    case music, airPods, charge
 }
 
 struct SystemOSD: Equatable {
@@ -12,7 +12,8 @@ struct SystemOSD: Equatable {
     var kind: Kind
     var level: Double
     var muted: Bool
-    var label: String { muted ? "Muted" : "\(Int(unit(level) * 100))%" }
+    var percentageText: String { (muted ? 0 : unit(level)).formatted(.percent.precision(.fractionLength(0...2))) }
+    var label: String { muted ? "Muted" : percentageText }
 }
 
 @MainActor final class NotchModel: ObservableObject {
@@ -29,11 +30,12 @@ struct SystemOSD: Equatable {
         if isUnlocking { variants.append("unlocking") }
         return themes.theme(state: presentation.rawValue, variants: variants, locked: showsLockLayout)
     }
+    var design: NotchDesign { NotchDesign(theme: theme) }
     var bubbleSize: CGFloat { max(20, min(80, theme.number("layout.bubbleSize", 32))) }
-    var bubbleGap: CGFloat { max(2, min(80, theme.number("layout.bubbleGap", 8))) }
+    var bubbleGap: CGFloat { design.satelliteSpacing }
     let preferences: Preferences
     let media = MediaService()
-    enum SettingsTab: Hashable { case general, calibration, media }
+    enum SettingsTab: Hashable { case general, calibration, media, advanced }
     @Published var settingsTab: SettingsTab = .general
     @Published var pinned = false
     let audio = AudioService()
@@ -102,29 +104,24 @@ struct SystemOSD: Equatable {
     private var collapseWork: DispatchWorkItem?
     private var peekWork: DispatchWorkItem?
     private var osdWork: DispatchWorkItem?
+    private var osdStartedAt: TimeInterval?
     private var noticeTimer: Timer?
     @Published private(set) var previewAirPodsBatteryDetails: AirPodsBatteryDetails?
     @Published private(set) var heldAirPodsNotice: DeviceNotice.ID?
     private var noticeDeadlines: [DeviceNotice.ID: TimeInterval] = [:]
-    private var pairedChargingID: DeviceNotice.ID?
     private var completedAirPodsRotation: DeviceNotice.ID?
     @Published private var pointerInside = false
     // Keep the upstream QML's uiScale (0.58), panel dimensions and calibrated 2 pt safety inset.
     let uiScale: CGFloat = 0.58
     var expandedWidth: CGFloat { 360 }
     var expandedSafeTop: CGFloat { max(0, cameraHeight + 2 - 37 * uiScale) }
-    private var pairedConnectionNotices: (charging: DeviceNotice, airPods: DeviceNotice)? {
-        guard preferences.showNotices, let first = notices.current else { return nil }
-        if first.kind == .charging, let second = notices.pending.first(where: { $0.connected && $0.airPodsArtwork != nil }) {
-            return (first, second)
-        }
-        if first.connected, first.airPodsArtwork != nil, let second = notices.pending.first(where: { $0.kind == .charging }) {
-            return (second, first)
-        }
-        return nil
+    var chargingTakeover: DeviceNotice? {
+        guard preferences.showNotices else { return nil }
+        if notices.current?.kind == .charging { return notices.current }
+        return notices.pending.first { $0.kind == .charging }
     }
 
-    var mainNotice: DeviceNotice? { pairedConnectionNotices?.airPods ?? notices.current }
+    var mainNotice: DeviceNotice? { chargingTakeover ?? notices.current }
 
     var inlineAirPods: DeviceNotice? {
         guard presentation == .notice, let notice = mainNotice,
@@ -139,7 +136,7 @@ struct SystemOSD: Equatable {
     private var musicHasConnectionNotice: Bool {
         guard preferences.showNotices, !showsLockLayout,
               let mediaItem = media.snapshot, mediaItem.isPlaying || pinned, let notice = mainNotice else { return false }
-        return notice.kind == .charging || (notice.connected && notice.airPodsArtwork != nil)
+        return notice.connected && notice.airPodsArtwork != nil
     }
 
     var leadingAirPods: DeviceNotice? {
@@ -156,54 +153,25 @@ struct SystemOSD: Equatable {
     }
     @Published var airPodsPillLighting = EdgeLighting()
 
-    var trailingCharge: DeviceNotice? {
-        if musicHasConnectionNotice || (showsLockLayout && preferences.showNotices) {
-            return pairedConnectionNotices?.charging ?? (mainNotice?.kind == .charging ? mainNotice : nil)
-        }
-        return presentation == .notice ? pairedConnectionNotices?.charging : nil
-    }
     var lockScreenNotice: DeviceNotice? {
-        guard showsLockLayout, preferences.showNotices, let notice = mainNotice,
+        guard osd == nil, showsLockLayout, preferences.showNotices, let notice = mainNotice,
               notice.kind != .charging, notice.id != leadingAirPods?.id else { return nil }
         return notice
     }
     static var chargePillWidth: CGFloat { satelliteSize }
     @Published var chargePillLighting = EdgeLighting()
-    var volumePillExtraOffset: CGFloat {
-        trailingCharge != nil || lockScreenNotice != nil ? bubbleSize + bubbleGap : 0
-    }
-
-    var trailingVolume: SystemOSD? {
-        guard let osd else { return nil }
-        let base = basePresentation
-        if base == .notice || (base != .expanded && showsLockLayout && media.snapshot != nil) {
-            return osd
-        }
-        return nil
-    }
-    var volumePillWidth: CGFloat { max(86, bubbleSize) }
-    static var volumePillGap: CGFloat { max(2, min(80, NotchThemeStore.shared.theme(state: "collapsed").number("layout.bubbleGap", 8))) }
-    @Published var volumePillLighting = EdgeLighting()
+    static var volumePillGap: CGFloat { NotchDesign(theme: NotchThemeStore.shared.theme(state: "collapsed")).satelliteSpacing }
     let compactLeadingWidth: CGFloat = 38
     let compactTrailingWidth: CGFloat = 38
     var collapsedHeight: CGFloat { cameraHeight + 0.5 }
-    let osdLeadingWidth: CGFloat = 46
-    var osdTrailingWidth: CGFloat { 55 + 22 }
-    var showsLockBubble: Bool { showsLockLayout && media.snapshot != nil }
-    var showsMediaBubble: Bool {
-        guard !showsLockLayout, media.snapshot != nil else { return false }
-        return presentation == .notice || presentation == .osd
-    }
+    var osdContentHeight: CGFloat { design.osdHeight(cameraHeight: cameraHeight, hasNotch: hasHardwareNotch) }
+    var showsLockBubble: Bool { osd == nil && chargingTakeover == nil && showsLockLayout && media.snapshot != nil }
+    var showsMediaBubble: Bool { chargingTakeover == nil && !showsLockLayout && media.snapshot != nil && presentation == .notice }
 
-    var expandedOSD: SystemOSD? { presentation == .expanded ? osd : nil }
-
-    var presentation: Presentation {
-        let base = basePresentation
-        if base != .expanded && osd != nil && trailingVolume == nil { return .osd }
-        return base
-    }
+    var presentation: Presentation { osd == nil ? basePresentation : .osd }
 
     private var basePresentation: Presentation {
+        if chargingTakeover != nil { return .notice }
         if showsLockLayout {
             return .resolve(osd: false, notice: false, media: media.snapshot != nil,
                             hovered: hovering || pinned, scrubbing: scrubbing, peek: false)
@@ -221,15 +189,16 @@ struct SystemOSD: Equatable {
             let noticeWidth = cameraWidth + noticeLeadingWidth + noticeTrailingWidth
             requested = noticeWidth
         case .expanded: requested = max(expandedWidth, cameraWidth + 120)
-        case .osd: requested = cameraWidth + osdLeadingWidth + osdTrailingWidth
+        case .osd: requested = design.osdWidth(cameraWidth: cameraWidth, hasNotch: hasHardwareNotch, wingWidth: compactLeadingWidth)
         }
         return min(availableWidth - 32, max(cameraWidth, theme.number("surface.width", requested)))
     }
     var contentHeight: CGFloat {
         let configured = theme.number("surface.height", -1)
-        if configured >= 0 { return max(cameraHeight, min(1000, configured)) }
+        if configured >= 0 { return max(presentation == .osd ? osdContentHeight : cameraHeight, min(1000, configured)) }
         switch presentation {
-        case .idle, .collapsed, .osd: return collapsedHeight
+        case .idle, .collapsed: return collapsedHeight
+        case .osd: return osdContentHeight
         case .notice: return collapsedHeight
         case .peek: return cameraHeight + 56
         case .expanded: return cameraHeight + (media.snapshot?.isBrowserAudio == true ? 84 : 138)
@@ -238,8 +207,9 @@ struct SystemOSD: Equatable {
     private var expandedEdgeInset: CGFloat { presentation == .expanded ? 2 : 0 }
     private var collapsedTrailingExtension: CGFloat { presentation == .collapsed ? 1 : 0 }
     private var hoverSwell: Bool { pointerInside && (presentation == .collapsed || presentation == .idle) }
-    private var surfaceWidth: CGFloat { bodyWidth - 2 * expandedEdgeInset + collapsedTrailingExtension + (hoverSwell ? theme.number("surface.hoverWidth", 6) : 0) }
-    private var surfaceOffset: CGFloat { bodyOffset + collapsedTrailingExtension / 2 }
+    private var surfaceWidth: CGFloat { bodyWidth - 2 * expandedEdgeInset + collapsedTrailingExtension - osdTrailingInset + (hoverSwell ? theme.number("surface.hoverWidth", 6) : 0) }
+    var osdTrailingInset: CGFloat { presentation == .osd && hasHardwareNotch ? design.osdTrailingInset : 0 }
+    private var surfaceOffset: CGFloat { bodyOffset + (collapsedTrailingExtension - osdTrailingInset) / 2 }
     private var surfaceHeight: CGFloat {
         // Size the silhouette independently of the player's layout proposal.
         let bottomClearance: CGFloat = presentation == .expanded && media.snapshot?.isBrowserAudio != true ? 8 : 0
@@ -250,7 +220,6 @@ struct SystemOSD: Equatable {
         if showsLockLayout && presentation == .idle { return -compactLeadingWidth / 2 }
         if presentation == .collapsed { return (compactTrailingWidth - compactLeadingWidth) / 2 }
         if presentation == .notice { return (noticeTrailingWidth - noticeLeadingWidth) / 2 }
-        if presentation == .osd { return (osdTrailingWidth - osdLeadingWidth) / 2 }
         return 0
     }
     var noticeLeadingWidth: CGFloat {
@@ -265,11 +234,11 @@ struct SystemOSD: Equatable {
         if showsInlineAirPodsDetails { return Self.airPodsExpandedWidth }
         return notice.connected || notice.battery != nil ? 44 : 0
     }
-    var radius: CGFloat { presentation == .expanded ? 70 * uiScale : presentation == .peek ? 24 : 12 }
+    var radius: CGFloat { design.outerRadius(for: presentation) }
     var earRadius: CGFloat { presentation == .expanded ? 12 : presentation == .peek ? 8 : 6 }
     var expandedWaveformInset: CGFloat {
         // Align the right edge of the waveform slot with the remaining time.
-        let trailingInset = media.snapshot?.canControl == true ? SeekBar.horizontalInset : 18
+        let trailingInset = media.snapshot?.canControl == true ? design.progressPadding : design.headerPadding
         return trailingInset + WaveformView.width / 2
     }
 
@@ -293,7 +262,7 @@ struct SystemOSD: Equatable {
     private var baseSurfaceTarget: NotchSurface {
         if showsMediaBubble {
             return .init(width: surfaceWidth, height: surfaceHeight, offset: surfaceOffset,
-                         radius: presentation == .expanded ? 30 : radius,
+                         radius: radius,
                          ear: earRadius, artworkX: -(Self.satelliteSize / 2 + Self.volumePillGap),
                          artworkY: collapsedHeight / 2, artworkSize: 17)
         }
@@ -306,7 +275,7 @@ struct SystemOSD: Equatable {
         let x: CGFloat = presentation == .expanded ? 46 : presentation == .peek ? 34 : compactLeadingWidth / 2
         let y: CGFloat = presentation == .expanded ? cameraHeight + 20 : presentation == .peek ? cameraHeight + 22 : collapsedHeight / 2
         return .init(width: surfaceWidth, height: surfaceHeight, offset: surfaceOffset,
-                     radius: presentation == .expanded ? 30 : radius,
+                     radius: radius,
                      ear: earRadius, artworkX: x - expandedEdgeInset, artworkY: y, artworkSize: size,
                      waveformInset: waveformInset - expandedEdgeInset + collapsedTrailingExtension,
                      waveformY: presentation == .collapsed ? cameraHeight / 2 : y)
@@ -428,12 +397,6 @@ struct SystemOSD: Equatable {
     }
     func activateBubble() {
         guard !showsLockLayout, showsMediaBubble else { return }
-        osdWork?.cancel(); osd = nil
-        if pairedConnectionNotices != nil {
-            pinned = true; hovering = true; peek = false
-            updateNoticeTimer()
-            return
-        }
         noticeTimer?.invalidate(); noticeTimer = nil; notices = NoticeQueue()
         noticeDeadlines.removeAll()
         completedAirPodsRotation = nil
@@ -449,8 +412,21 @@ struct SystemOSD: Equatable {
 
     func showOSD(_ value: SystemOSD) {
         guard preferences.showOSD else { return }
-        osdWork?.cancel(); osd = value; updateNoticeTimer()
-        let work = DispatchWorkItem { [weak self] in self?.osd = nil; self?.updateNoticeTimer() }
+        if osdStartedAt == nil { osdStartedAt = ProcessInfo.processInfo.systemUptime }
+        osdWork?.cancel()
+        osd = value
+        updateNoticeTimer()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            if let start = self.osdStartedAt {
+                let elapsed = ProcessInfo.processInfo.systemUptime - start
+                self.noticeDeadlines = self.noticeDeadlines.mapValues { $0 + elapsed }
+            }
+            self.osdStartedAt = nil
+            self.osdWork = nil
+            self.osd = nil
+            self.updateNoticeTimer()
+        }
         osdWork = work; DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
     }
 
@@ -467,9 +443,8 @@ struct SystemOSD: Equatable {
             return
         }
         let hadCurrent = notices.current != nil
-        let alreadyPaired = pairedConnectionNotices != nil
         notices.enqueue(notice)
-        if !hadCurrent || (!alreadyPaired && pairedConnectionNotices != nil) { updateNoticeTimer() }
+        if notice.kind == .charging || !hadCurrent { updateNoticeTimer() }
     }
     func toggleAirPodsDetails(_ id: DeviceNotice.ID) {
         holdAirPodsNotice(id, open: heldAirPodsNotice != id)
@@ -504,7 +479,7 @@ struct SystemOSD: Equatable {
             noticeDeadlines[id] = ProcessInfo.processInfo.systemUptime
         } else {
             noticeDeadlines.removeValue(forKey: id)
-            expireNotice(id)
+            notices.expire(id: id)
         }
         updateNoticeTimer()
     }
@@ -527,19 +502,13 @@ struct SystemOSD: Equatable {
     private func updateNoticeTimer() {
         noticeTimer?.invalidate()
         noticeTimer = nil
-        guard let current = notices.current, showsLockLayout || osd == nil || musicHasConnectionNotice || trailingVolume != nil else {
+        guard osd == nil else { return }
+        guard let current = notices.current else {
             noticeDeadlines.removeAll()
             return
         }
 
-        let pair = pairedConnectionNotices
-        let visible = pair.map { [$0.charging, $0.airPods] } ?? [current]
-        if let chargingID = pair?.charging.id, chargingID != pairedChargingID {
-            // The standalone notice may have spent most of its time onscreen
-            // before AirPods arrived. Give the new satellite a full display interval.
-            noticeDeadlines.removeValue(forKey: chargingID)
-        }
-        pairedChargingID = pair?.charging.id
+        let visible = chargingTakeover.map { [$0] } ?? [current]
         let visibleIDs = Set(visible.map(\.id))
         noticeDeadlines = noticeDeadlines.filter { visibleIDs.contains($0.key) }
         if let completedAirPodsRotation, !visibleIDs.contains(completedAirPodsRotation) {
@@ -564,19 +533,18 @@ struct SystemOSD: Equatable {
                 guard let self else { return }
                 self.noticeDeadlines.removeValue(forKey: next.key)
                 if self.completedAirPodsRotation == next.key { self.completedAirPodsRotation = nil }
-                self.expireNotice(next.key)
+                self.notices.expire(id: next.key)
                 self.updateNoticeTimer()
             }
         }
     }
 
-    private func expireNotice(_ id: DeviceNotice.ID) {
-        let pair = pairedConnectionNotices
-        let companion = pair.flatMap { $0.charging.id == id ? $0.airPods.id : $0.charging.id }
-        notices.expire(id: id, promoting: companion)
+    func setPreview(_ enabled: Bool) {
+        if enabled { close() }
+        previewMode = enabled
+        media.setPreview(enabled)
+        if enabled && preferences.previewPeek { showPeek() }
     }
-
-    func setPreview(_ enabled: Bool) { previewMode = enabled; media.setPreview(enabled); if enabled { showPeek() } }
     func previewNotice(artwork: AirPodsArtwork = .init(family: .airpodsPro), battery: Double? = 0.75) {
         guard preferences.showNotices else { return }
         let key = "preview/airpods"

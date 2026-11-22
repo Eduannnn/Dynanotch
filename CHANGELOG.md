@@ -1,3 +1,11 @@
+## v1.2.3
+
+- Volume and brightness now briefly take over the main notch, with the icon on the left, the bar below the camera cutout, and the percentage on the right. The regular keys adjust the actual level in 5% steps.
+- Plugging in shows the charge in the main notch for two seconds, then brings back what was there. It works the same way on the lock screen. The battery icon and percentage are smaller, and “Low battery” starts at 10%.
+- Theme settings now have sliders and reset buttons for common options like shadows, edge highlights, and Liquid Glass. The full JSON controls are under Advanced.
+- Liquid Glass has softer refraction, and turning off its edge highlight also turns it off on side bubbles.
+- Point at the physical notch and press ⌘, to open Settings. The preview player stays compact by default, with the peek animation available in Settings.
+
 ## v1.2.2 - hotfix
 
 - Volume and brightness animate into the expanded player, with the icon above the artwork and the bar on the right.

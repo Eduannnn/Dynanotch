@@ -241,10 +241,10 @@ final class NotchClearGlassView: NSView {
 // MARK: - SwiftUI Representable
 
 struct NotchClearGlassBackdrop: NSViewRepresentable {
-    var refraction: Double = 42
+    var refraction: Double = 32
     var lensHeight: Double = 44
     var blur: Double = 0
-    var dispersion: Double = 1.8
+    var dispersion: Double = 0.35
     var topRadius: CGFloat
     var bottomRadius: CGFloat
 

@@ -246,8 +246,18 @@ final class NotchPanel: NSPanel {
     }
     var isPointerOverNotch: Bool {
         guard !model.hidden, !model.showsLockLayout else { return false }
-        // The camera area belongs to the notch's click target as well.
-        return bodyRect.contains(NSEvent.mouseLocation) || isInteractive(NSEvent.mouseLocation)
+        let point = NSEvent.mouseLocation
+        if let screen = geometry?.screen, screen.safeAreaInsets.top > 0 {
+            let left = screen.auxiliaryTopLeftArea?.maxX ?? hardwareObstruction?.minX
+            let right = screen.auxiliaryTopRightArea?.minX ?? hardwareObstruction?.maxX
+            if let left, let right {
+                // Include the boundary where macOS can stop the pointer.
+                return point.x >= left && point.x <= right
+                    && point.y >= screen.frame.maxY - screen.safeAreaInsets.top
+                    && point.y <= screen.frame.maxY
+            }
+        }
+        return bodyRect.contains(point) || isInteractive(point)
     }
     private func trackPointer() {
         guard !model.showsLockLayout || model.media.snapshot != nil else { panel.ignoresMouseEvents = true; return }
@@ -266,7 +276,6 @@ final class NotchPanel: NSPanel {
         let bubbleLighting = lightingForSatellite(.music)
         let airPodsLighting = lightingForSatellite(.airPods)
         let chargeLighting = lightingForSatellite(.charge)
-        let pillLighting = lightingForSatellite(.volume)
         func changed(_ old: EdgeLighting, _ new: EdgeLighting) -> Bool {
             abs(old.point.x - new.point.x) > 0.005 || abs(old.point.y - new.point.y) > 0.005
                 || abs(old.strength - new.strength) > 0.01
@@ -275,7 +284,6 @@ final class NotchPanel: NSPanel {
         if changed(model.bubbleLighting, bubbleLighting) { model.bubbleLighting = bubbleLighting }
         if changed(model.airPodsPillLighting, airPodsLighting) { model.airPodsPillLighting = airPodsLighting }
         if changed(model.chargePillLighting, chargeLighting) { model.chargePillLighting = chargeLighting }
-        if changed(model.volumePillLighting, pillLighting) { model.volumePillLighting = pillLighting }
         // Proximity only affects lighting. It never expands the interactive region.
         model.pointerIsInteractive = interactive
         if panel.ignoresMouseEvents == interactive { panel.ignoresMouseEvents = !interactive }
