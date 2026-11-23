@@ -10,12 +10,15 @@ import NotchCore
     enum Status { case off, needsAccessibility, unavailable, active }
     @Published private(set) var status: Status = .off
     private(set) var tapLocation = "none"
+    var observeLockedKey: ((HardwareMediaKey) -> Void)?
     var perform: ((HardwareMediaKey, Bool) -> Bool)?
     var settingsShortcut: (() -> Bool)?
     private var capturedSettingsKey: Int64?
     private var requested = true
     private var started = false
-    private var suspended = false
+    private var locked = false
+    private var observeWhileLocked = false
+    private var activeFilter = false
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var timer: Timer?
@@ -30,14 +33,11 @@ import NotchCore
         }
     }
 
-    func configure(enabled: Bool) {
+    func configure(enabled: Bool, locked: Bool, observeWhileLocked: Bool) {
+        if self.locked != locked || (locked && requested != enabled) { tearDownTap() }
         requested = enabled
-        guard started else { return }
-        refresh()
-    }
-    func suspendForLockScreen(_ suspended: Bool) {
-        guard self.suspended != suspended else { return }
-        self.suspended = suspended
+        self.locked = locked
+        self.observeWhileLocked = observeWhileLocked
         if started { refresh() }
     }
 
@@ -62,30 +62,48 @@ import NotchCore
     }
 
     private func refresh() {
-        guard !suspended, requested || settingsShortcut != nil else { tearDownTap(); setStatus(.off); return }
-        guard AXIsProcessTrusted() else { tearDownTap(); setStatus(requested ? .needsAccessibility : .off); return }
+        if locked {
+            guard observeWhileLocked else { tearDownTap(); setStatus(.off); return }
+        } else {
+            guard requested || settingsShortcut != nil else { tearDownTap(); setStatus(.off); return }
+            guard AXIsProcessTrusted() else { tearDownTap(); setStatus(requested ? .needsAccessibility : .off); return }
+        }
+        let wantsActiveFilter = !locked || (requested && AXIsProcessTrusted())
+        if locked && activeFilter && !wantsActiveFilter { tearDownTap() }
         if let tap {
             if !CGEvent.tapIsEnabled(tap: tap) { CGEvent.tapEnable(tap: tap, enable: true) }
-            setStatus(requested ? (CGEvent.tapIsEnabled(tap: tap) ? .active : .unavailable) : .off)
+            setStatus(requested && activeFilter ? (CGEvent.tapIsEnabled(tap: tap) ? .active : .unavailable) : .off)
             return
         }
-        let mask = (CGEventMask(1) << 14) | (CGEventMask(1) << CGEventType.keyDown.rawValue) | (CGEventMask(1) << CGEventType.keyUp.rawValue)
+        let mediaMask = CGEventMask(1) << 14
+        // Only system-defined media events are registered while locked.
+        let mask = locked ? mediaMask : mediaMask | (CGEventMask(1) << CGEventType.keyDown.rawValue) | (CGEventMask(1) << CGEventType.keyUp.rawValue)
         let context = Unmanaged.passUnretained(self).toOpaque()
         let callback: CGEventTapCallBack = { _, type, event, context in
             guard let context else { return Unmanaged.passUnretained(event) }
             let service = Unmanaged<MediaKeyService>.fromOpaque(context).takeUnretainedValue()
             return MainActor.assumeIsolated { service.filter(type: type, event: event) }
         }
-        // Use the earliest authorized filter. Some OS/security configurations only allow the session location.
-        let hardware = CGEvent.tapCreate(tap: .cghidEventTap, place: .headInsertEventTap, options: .defaultTap, eventsOfInterest: mask, callback: callback, userInfo: context)
-        let port = hardware ?? CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap, eventsOfInterest: mask, callback: callback, userInfo: context)
-        guard let port else { setStatus(.unavailable); return }
-        tapLocation = hardware != nil ? "hardware" : "session"
-        guard let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0) else { CFMachPortInvalidate(port); setStatus(.unavailable); return }
+        func createTap(options: CGEventTapOptions) -> (CFMachPort, String)? {
+            if let port = CGEvent.tapCreate(tap: .cghidEventTap, place: .headInsertEventTap, options: options,
+                                            eventsOfInterest: mask, callback: callback, userInfo: context) {
+                return (port, "hardware")
+            }
+            return CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: options,
+                                     eventsOfInterest: mask, callback: callback, userInfo: context).map { ($0, "session") }
+        }
+        let filter = wantsActiveFilter ? createTap(options: .defaultTap) : nil
+        guard let (port, location) = filter ?? (locked ? createTap(options: .listenOnly) : nil) else {
+            setStatus(locked ? .off : .unavailable)
+            return
+        }
+        activeFilter = filter != nil
+        tapLocation = location
+        guard let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0) else { CFMachPortInvalidate(port); setStatus(locked ? .off : .unavailable); return }
         tap = port; source = runLoopSource
         CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: port, enable: true)
-        setStatus(requested ? (CGEvent.tapIsEnabled(tap: port) ? .active : .unavailable) : .off)
+        setStatus(requested && activeFilter ? (CGEvent.tapIsEnabled(tap: port) ? .active : .unavailable) : .off)
     }
 
     private func filter(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -93,6 +111,22 @@ import NotchCore
             capture.reset()
             capturedSettingsKey = nil
             if started, let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            return Unmanaged.passUnretained(event)
+        }
+        if locked {
+            guard type.rawValue == 14, let cocoa = NSEvent(cgEvent: event),
+                  let stroke = HardwareMediaKeyStroke.decode(subtype: cocoa.subtype.rawValue, data1: cocoa.data1) else {
+                return Unmanaged.passUnretained(event)
+            }
+            let flags = cocoa.modifierFlags
+            let eligible = Self.isAdjustment(flags)
+            let fine = flags.contains(.option) && flags.contains(.shift)
+            let action = perform
+            if activeFilter && requested && capture.route(stroke, eligible: eligible, perform: { action?($0, fine) ?? false }) {
+                return nil
+            }
+            // If the app can't handle the key, let macOS apply it and observe the resulting level.
+            if stroke.phase == .down && eligible { observeLockedKey?(stroke.key) }
             return Unmanaged.passUnretained(event)
         }
         if type == .keyUp, event.getIntegerValueField(.keyboardEventKeycode) == capturedSettingsKey {
@@ -122,16 +156,20 @@ import NotchCore
               let stroke = HardwareMediaKeyStroke.decode(subtype: cocoa.subtype.rawValue, data1: cocoa.data1) else { return Unmanaged.passUnretained(event) }
         let flags = cocoa.modifierFlags
         // Preserve Option shortcuts to System Settings and Command/Control combinations.
-        let eligible = !flags.contains(.command) && !flags.contains(.control) && (!flags.contains(.option) || flags.contains(.shift))
+        let eligible = Self.isAdjustment(flags)
         let fine = flags.contains(.option) && flags.contains(.shift)
         let action = perform
         let consumed = capture.route(stroke, eligible: eligible) { key in action?(key, fine) ?? false }
         return consumed ? nil : Unmanaged.passUnretained(event)
     }
+    private static func isAdjustment(_ flags: NSEvent.ModifierFlags) -> Bool {
+        !flags.contains(.command) && !flags.contains(.control) && (!flags.contains(.option) || flags.contains(.shift))
+    }
+
     private func tearDownTap() {
         if let tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
         if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
-        source = nil; tap = nil; tapLocation = "none"; capture.reset(); capturedSettingsKey = nil
+        source = nil; tap = nil; activeFilter = false; tapLocation = "none"; capture.reset(); capturedSettingsKey = nil
     }
     private func setStatus(_ next: Status) { if status != next { status = next } }
 }

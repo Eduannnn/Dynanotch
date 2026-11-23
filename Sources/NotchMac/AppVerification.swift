@@ -454,6 +454,9 @@ import NotchCore
         musicLayout.screenLocked = true
         let lockedVolumeVisible = osdTakesOver(musicLayout)
             && musicLayout.leadingAirPods != nil
+        musicLayout.osd = .init(kind: .brightness, level: 0.4375, muted: false)
+        let lockedBrightnessVisible = osdTakesOver(musicLayout)
+        render(musicLayout, output.appendingPathComponent("locked-brightness.png"))
         musicLayout.osd = nil
         let lockedBubblesActivities = musicLayout.presentation == .collapsed && !musicLayout.showsMediaBubble && musicLayout.showsLockBubble
             && musicLayout.leadingAirPods != nil
@@ -585,13 +588,17 @@ import NotchCore
             unlockRestoresExpansion = !model.isUnlocking && model.presentation == .expanded
         }
         let motion = NotchAnimationCoordinator()
+        let lockMotion = NotchAnimationCoordinator()
         let expanded = NotchSurface(width: 400, height: 193.5, offset: 0, radius: 30, ear: 12)
+        lockMotion.update(compact, screen: NSScreen.main, immediate: true)
+        lockMotion.update(expanded, screen: NSScreen.main, useRunLoopTimer: true)
         motion.update(compact, screen: NSScreen.main, immediate: true)
         motion.update(expanded, screen: NSScreen.main)
         DispatchQueue.main.asyncAfter(deadline: .now()+0.08) { motion.update(compact, screen: NSScreen.main) }
         DispatchQueue.main.asyncAfter(deadline: .now()+0.16) { motion.update(expanded, screen: NSScreen.main) }
         // The installed loop is six seconds. Finish this check before the playback watchdog can expire.
         DispatchQueue.main.asyncAfter(deadline: .now()+7.5) {
+            let lockedMotionSettled = !lockMotion.isAnimating && abs(lockMotion.surface.height - expanded.height) < 0.1
             let motionSettled = !motion.isAnimating && abs(motion.surface.width-expanded.width) < 0.1
             let airPodsNoticeExpired = musicLayout.notices.current == nil && musicLayout.notices.pending.isEmpty
             let inlineNoticeExpired = inlineLayout.notices.current == nil
@@ -628,10 +635,11 @@ import NotchCore
                 "lockedPlayerOpens": lockedPlayerOpens && lockedPlayerExpands,
                 "lockedPlayerCloses": lockedPlayerCloses,
                 "lockedBubblesActivities": lockedBubblesActivities,
-                "lockedVolumeVisible": lockedVolumeVisible,
+                "lockedVolumeVisible": lockedVolumeVisible, "lockedBrightnessVisible": lockedBrightnessVisible,
+                "lockedMotionSettled": lockedMotionSettled,
                 "motionSettled": motionSettled, "motionFrames": motion.frameCount,
                 "finalWidth": motion.surface.width, "finalHeight": motion.surface.height,
-                "result": motionSettled && volumeReplacesMusic && volumeReplacesExpanded && brightnessReplacesExpanded && pausedPlayerUsesBrightnessOSD && osdRestoresExpanded
+                "result": motionSettled && lockedMotionSettled && lockedBrightnessVisible && volumeReplacesMusic && volumeReplacesExpanded && brightnessReplacesExpanded && pausedPlayerUsesBrightnessOSD && osdRestoresExpanded
                     && inlineAirPodsExpanded && inlineAirPodsCollapsed
                     && volumeReplacesMusicWithNotices
                     && trackChangeStaysCollapsed && nextFlipsForward && previousFlipsBackward

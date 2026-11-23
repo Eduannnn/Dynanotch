@@ -325,7 +325,11 @@ struct NotchRootView: View {
                 ? max(0.05, model.theme.number("motion.idleShrinkResponse", 0.65))
                 : max(0.05, model.theme.number("motion.response", 0.32))
             motion.damping = max(0.1, model.theme.number("motion.damping", 0.88))
-            motion.update(value, screen: model.displayScreen)
+            motion.update(value, screen: model.displayScreen, useRunLoopTimer: model.screenLocked)
+        }
+        .notchOnChange(of: model.screenLocked) { _, locked in
+            // The lock overlay can remain visible while this session's display link is paused.
+            motion.update(model.surfaceTarget, screen: model.displayScreen, useRunLoopTimer: locked)
         }
         .notchOnChange(of: model.showsMediaBubble) { _, _ in model.onSurfaceChanged?() }
         .notchOnChange(of: reduceMotion) { _, _ in motion.update(model.surfaceTarget, screen: model.displayScreen, immediate: true) }
@@ -411,7 +415,7 @@ struct NotchRootView: View {
                         .position(layout.iconCenter)
                     NotchVolumeBar(osd: osd, width: layout.barWidth)
                         .position(layout.barCenter)
-                    Text(osd.percentageText)
+                    Text(osd.percentageText(wholeNumbers: model.screenLocked))
                         .font(.system(size: NotchDesign.OSDLayout.percentageFontSize, weight: .medium).monospacedDigit())
                         .contentTransition(.numericText())
                         .lineLimit(1)
@@ -424,7 +428,7 @@ struct NotchRootView: View {
                 .themed("osd")
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(osd.kind == .volume ? "Volume" : "Brightness")
-                .accessibilityValue(osd.label)
+                .accessibilityValue(osd.muted ? "Muted" : osd.percentageText(wholeNumbers: model.screenLocked))
             }
         }
     }

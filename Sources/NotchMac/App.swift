@@ -107,7 +107,7 @@ import UserNotifications
                 if !HUDDiagnostics.queryRunning() { print("The running app did not reply to the HUD status request.") }
                 NSApp.terminate(nil); return
             }
-            model.mediaKeys.configure(enabled: true); model.mediaKeys.start()
+            model.mediaKeys.configure(enabled: true, locked: false, observeWhileLocked: false); model.mediaKeys.start()
             let report: [String: Any] = [
                 "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
                 "accessibilityGranted": AXIsProcessTrusted(),

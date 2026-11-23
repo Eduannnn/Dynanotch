@@ -21,6 +21,7 @@ struct NotchSurface: Equatable {
     @Published private(set) var surface = NotchSurface(width: 208, height: 37.5, offset: 0, radius: 12, ear: 6)
     private var values: [MotionValue] = []
     private var link: AnyObject?
+    private var usesRunLoopTimer = false
     private var invalidateLink: (() -> Void)?
     private var lastTime = CACurrentMediaTime()
     private var target = NotchSurface(width: 208, height: 37.5, offset: 0, radius: 12, ear: 6)
@@ -30,7 +31,7 @@ struct NotchSurface: Equatable {
     private(set) var frameCount = 0
     var isAnimating: Bool { link != nil }
 
-    func update(_ next: NotchSurface, screen: NSScreen?, immediate: Bool = false) {
+    func update(_ next: NotchSurface, screen: NSScreen?, immediate: Bool = false, useRunLoopTimer: Bool = false) {
         let components = [next.width, next.height, next.offset, next.radius, next.ear,
                           next.artworkX, next.artworkY, next.artworkSize,
                           next.waveformInset, next.waveformY].map(Double.init)
@@ -39,7 +40,10 @@ struct NotchSurface: Equatable {
             values = components.map(MotionValue.init)
             target = next; surface = next; onFrame?(next); return
         }
-        if link != nil { advance(to: now) }
+        if link != nil {
+            advance(to: now)
+            if useRunLoopTimer != usesRunLoopTimer { stop() }
+        }
         target = next
         for i in values.indices { values[i].target = components[i] }
         if immediate || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
@@ -47,9 +51,10 @@ struct NotchSurface: Equatable {
             stop(); surface = next; onFrame?(next); return
         }
         if values.allSatisfy(\.settled) { publish(); return }
-        if link == nil, let screen = screen ?? NSScreen.main {
+        if link == nil {
             lastTime = now
-            if #available(macOS 14.0, *) {
+            usesRunLoopTimer = useRunLoopTimer
+            if !useRunLoopTimer, #available(macOS 14.0, *), let screen = screen ?? NSScreen.main {
                 let displayLink = screen.displayLink(target: self, selector: #selector(tick(_:)))
                 link = displayLink; invalidateLink = { displayLink.invalidate() }
                 displayLink.add(to: .main, forMode: .common)

@@ -12,8 +12,9 @@ struct SystemOSD: Equatable {
     var kind: Kind
     var level: Double
     var muted: Bool
-    var percentageText: String { (muted ? 0 : unit(level)).formatted(.percent.precision(.fractionLength(0...2))) }
-    var label: String { muted ? "Muted" : percentageText }
+    func percentageText(wholeNumbers: Bool) -> String {
+        (muted ? 0 : unit(level)).formatted(.percent.precision(.fractionLength(0...(wholeNumbers ? 0 : 2))))
+    }
 }
 
 @MainActor final class NotchModel: ObservableObject {
@@ -104,6 +105,10 @@ struct SystemOSD: Equatable {
     private var collapseWork: DispatchWorkItem?
     private var peekWork: DispatchWorkItem?
     private var osdWork: DispatchWorkItem?
+    private var lockedHUDWork: DispatchWorkItem?
+    private var pendingLockedHUDKey: HardwareMediaKey?
+    private(set) var lockedOSDCount = 0
+    private(set) var lastLockedOSD: SystemOSD?
     private var osdStartedAt: TimeInterval?
     private var noticeTimer: Timer?
     @Published private(set) var previewAirPodsBatteryDetails: AirPodsBatteryDetails?
@@ -310,9 +315,9 @@ struct SystemOSD: Equatable {
             if item == nil { self.peek = false }
         }.store(in: &subscriptions)
         self.preferences.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
-        self.preferences.$showOSD.combineLatest(self.preferences.$replaceSystemHUD, $hidden, $screenLocked)
+        self.preferences.$showOSD.combineLatest(self.preferences.$replaceSystemHUD, self.preferences.$showOnLockScreen, $hidden)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] show, replace, hidden, locked in self?.mediaKeys.configure(enabled: show && replace && !hidden && !locked) }
+            .sink { [weak self] _, _, _, _ in self?.configureMediaKeys() }
             .store(in: &subscriptions)
         audio.$message.combineLatest(system.$message).dropFirst().sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &subscriptions)
         self.preferences.$waveformEnabled.combineLatest(
@@ -323,6 +328,7 @@ struct SystemOSD: Equatable {
         }.store(in: &subscriptions)
         audio.$selectedDevice.dropFirst().removeDuplicates().sink { [weak self] _ in self?.waveform.restartIfActive() }.store(in: &subscriptions)
         audio.onVolumeChanged = { [weak self] level, muted in self?.showOSD(.init(kind: .volume, level: level, muted: muted)) }
+        mediaKeys.observeLockedKey = { [weak self] key in self?.refreshLockedHUD(after: key) }
         mediaKeys.perform = { [weak self] key, fine in self?.handleHardwareKey(key, fine: fine) ?? false }
         system.onNotice = { [weak self] notice in self?.enqueue(notice) }
         system.onArtworkUpdated = { [weak self] key, artwork in self?.notices.updateArtwork(key: key, artwork: artwork) }
@@ -335,11 +341,12 @@ struct SystemOSD: Equatable {
         audio.start(); brightness.start(); system.start()
         if demo { setPreview(true) }
         media.start()
-        mediaKeys.configure(enabled: preferences.showOSD && preferences.replaceSystemHUD && !hidden && !screenLocked)
+        configureMediaKeys()
         mediaKeys.start()
     }
     func stop() {
         unlockWork?.cancel()
+        lockedHUDWork?.cancel()
         idlePillWork?.cancel()
         media.stop(); mediaKeys.stop(); waveform.stop(); system.stop(); noticeTimer?.invalidate()
     }
@@ -350,6 +357,9 @@ struct SystemOSD: Equatable {
         unlockWork = nil
         isUnlocking = !locked && animateUnlock
         screenLocked = locked
+        lockedHUDWork?.cancel(); lockedHUDWork = nil
+        pendingLockedHUDKey = nil
+        configureMediaKeys()
         if isUnlocking {
             let work = DispatchWorkItem { [weak self] in
                 self?.isUnlocking = false
@@ -361,7 +371,43 @@ struct SystemOSD: Equatable {
         }
     }
 
+    private var canShowLockedHUD: Bool {
+        screenLocked && preferences.showOnLockScreen && preferences.showOSD && !hidden
+    }
+
+    private func configureMediaKeys() {
+        mediaKeys.configure(enabled: preferences.showOSD && preferences.replaceSystemHUD && !hidden,
+                            locked: screenLocked, observeWhileLocked: canShowLockedHUD)
+    }
+
+    private func refreshLockedHUD(after key: HardwareMediaKey) {
+        guard canShowLockedHUD else { return }
+        pendingLockedHUDKey = key
+        guard lockedHUDWork == nil else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.lockedHUDWork = nil
+            let key = self.pendingLockedHUDKey
+            self.pendingLockedHUDKey = nil
+            guard self.canShowLockedHUD, let key else { return }
+            switch key {
+            case .volumeUp, .volumeDown, .mute:
+                self.audio.refreshNow()
+                guard self.audio.canAdjust else { return }
+                self.showOSD(.init(kind: .volume, level: self.audio.volumeForStepping, muted: self.audio.muted))
+            case .brightnessUp, .brightnessDown:
+                self.brightness.refreshNow()
+                guard self.brightness.available else { return }
+                self.showOSD(.init(kind: .brightness, level: self.brightness.level, muted: false))
+            }
+        }
+        lockedHUDWork = work
+        // Give macOS time to apply its hardware-key change before reading it.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+    }
+
     private func handleHardwareKey(_ key: HardwareMediaKey, fine: Bool) -> Bool {
+        guard !screenLocked || (canShowLockedHUD && preferences.replaceSystemHUD) else { return false }
         switch key {
         case .volumeUp, .volumeDown:
             audio.refreshNow()
@@ -411,7 +457,11 @@ struct SystemOSD: Equatable {
     }
 
     func showOSD(_ value: SystemOSD) {
-        guard preferences.showOSD else { return }
+        guard preferences.showOSD, !screenLocked || canShowLockedHUD else { return }
+        if screenLocked && osd != value {
+            lockedOSDCount += 1
+            lastLockedOSD = value
+        }
         if osdStartedAt == nil { osdStartedAt = ProcessInfo.processInfo.systemUptime }
         osdWork?.cancel()
         osd = value

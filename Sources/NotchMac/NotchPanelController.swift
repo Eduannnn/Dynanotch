@@ -130,7 +130,6 @@ final class NotchPanel: NSPanel {
             }
             model.updateScreenLock(locked, animateUnlock: model.preferences.showOnLockScreen
                 && !model.hidden && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
-            model.mediaKeys.suspendForLockScreen(locked)
         }
         if locked && unlockWatchdog == nil {
             // Recover if the distributed unlock notification is dropped.
